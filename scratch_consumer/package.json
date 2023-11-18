@@ -6,6 +6,7 @@
   "scripts": {
     "start": "ts-node src/scratch.ts",
     "dev": "ts-node-dev src/scratch.ts",
+    "inspect": "code ../data_logs/$(ls ../data_logs | tail -n 1)/summary.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
