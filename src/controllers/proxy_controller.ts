@@ -40,25 +40,29 @@ export const initProxyRouter = (deps: Deps) => {
             }
         }
 
-        const fetchRes = await fetch(host, {
+        const reqPath = req.originalUrl;
+        const destinationUrl = host + reqPath;
+
+        console.log(destinationUrl);
+
+        const fetchRes = await fetch(destinationUrl, {
             headers,
         });
 
         const responseHeaders = fetchRes.headers;
         let responseBody: string | object = await fetchRes.text();
+        let isJSON = false;
         try {
             responseBody = JSON.parse(responseBody);
+            isJSON = true;
         } catch (e) {
         }
-
-        const fullUrl = req.originalUrl;
-        console.log(fullUrl);
 
         const call: RecordedCall = {
             time: new Date().toISOString(),
             host,
             requestMethod: req.method,
-            requestPath: fullUrl,
+            requestPath: reqPath,
             requestHeaders: headers,
             requestBody: req.body,
             responseHeaders: Array.from(responseHeaders).reduce<Record<string, string>>((accum, current) => {
@@ -71,7 +75,11 @@ export const initProxyRouter = (deps: Deps) => {
 
         deps.sessionManager.getCurrentSession()?.addCallToSession(call);
 
-        res.send(fetchRes);
+        if (isJSON) {
+            res.json(responseBody);
+        } else {
+            res.send(responseBody);
+        }
     });
 
     return proxyRouter;
