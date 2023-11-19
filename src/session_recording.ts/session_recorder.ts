@@ -11,8 +11,8 @@ export class RecordingSession {
     }
 
     logRecordedCalls = async (): Promise<string> => {
-        const startTimeStr = this.startTime.toISOString();
-        const endTime = new Date().toISOString();
+        const startTimeStr = this.startTime.toISOString().replaceAll(':', '-');
+        const endTime = new Date().toISOString().replaceAll(':', '-');
 
         const topFolderName = `data_logs/${startTimeStr}__${endTime}`;
         await fs.mkdir(topFolderName, {recursive: true});
@@ -22,16 +22,22 @@ export class RecordingSession {
         const calls = [];
 
         for (const call of this.recordedCalls) {
-            const subpath = withTopFolder(`${call.requestPath.replaceAll('/', '_')}`);
+            let requestPath = call.requestPath;
+            if (requestPath.length > 1 && requestPath.at(0) === '/') {
+                requestPath = requestPath.slice(1);
+            }
+
+            const subpath = withTopFolder(`${requestPath.replaceAll('/', '_')}`);
             await fs.mkdir(subpath, {recursive: true});
 
-            const fname = `${subpath}/${call.requestMethod}_${call.time}.json`;
+            const fname = `${subpath}/${call.requestMethod}_${call.time.replaceAll(':', '-')}.json`;
             await fs.writeFile(fname, JSON.stringify(call, null, 2));
 
             calls.push({
                 host: call.host,
                 path: call.requestPath,
-                time: call.time,
+                method: call.requestMethod,
+                time: call.time, // would be cool to have info on relative time from the start of the session, and measure the duration of the request, and measure the time in between the operations actions in the session
                 fname,
             });
         }

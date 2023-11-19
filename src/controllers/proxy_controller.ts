@@ -2,6 +2,7 @@ import express from 'express';
 import {SessionManager} from '../session_recording.ts/sessions_manager';
 import {RecordedCall} from '../types';
 
+import fetch from 'node-fetch';
 
 type Deps = {sessionManager: SessionManager};
 
@@ -24,6 +25,10 @@ export const initProxyRouter = (deps: Deps) => {
         let host = original_host;
         if (!host.startsWith('https://') && !host.startsWith('http://')) {
             host = 'https://' + host;
+        }
+
+        if (host.endsWith('/')) {
+            host = host.slice(0, host.length - 1);
         }
 
         const headers: Record<string, string> = {};
@@ -63,13 +68,13 @@ export const initProxyRouter = (deps: Deps) => {
             host,
             requestMethod: req.method,
             requestPath: reqPath,
-            requestHeaders: headers,
             requestBody: req.body,
+            responseBody,
+            requestHeaders: headers,
             responseHeaders: Array.from(responseHeaders).reduce<Record<string, string>>((accum, current) => {
                 accum[current[0]] = current[1];
                 return accum;
             }, {}),
-            responseBody,
             requestIp: req.ip || '',
         }
 
