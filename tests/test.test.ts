@@ -2,6 +2,7 @@ import {MockServer} from 'jest-mock-server';
 import request from 'supertest';
 
 import {initApp} from '../src/express_app';
+import {SessionManager} from '../src/session_recording.ts/sessions_manager';
 
 describe('Test proxy', () => {
     const server = new MockServer();
@@ -25,7 +26,9 @@ describe('Test proxy', () => {
 
         const url = server.getURL();
 
-        const app = initApp();
+        const sessionManager = new SessionManager();
+        sessionManager.startNewSession();
+        const app = initApp({sessionManager, shouldProxy: true});
 
         const response = await request(app)
             .get('/user')
@@ -35,5 +38,8 @@ describe('Test proxy', () => {
         expect(response.body).toEqual(testBody);
 
         expect(route).toHaveBeenCalledTimes(1);
+
+        const message = await sessionManager.finishCurrentSession();
+        expect(message?.split('\n')[0]).toEqual('Recorded 1 calls');
     });
 });

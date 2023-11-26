@@ -10,4 +10,8 @@ export class SessionManager {
     getCurrentSession = (): RecordingSession | undefined => {
         return this.currentSession;
     }
+
+    finishCurrentSession = async (): Promise<string | undefined> => {
+        return this.currentSession?.logRecordedCalls();
+    }
 }

@@ -48,7 +48,7 @@ export const initProxyRouter = (deps: Deps) => {
         const reqPath = req.originalUrl;
         const destinationUrl = host + reqPath;
 
-        console.log(destinationUrl);
+        console.log(`FULLCIRCLE LOG: Proxying to url: ${destinationUrl}`);
 
         const fetchRes = await fetch(destinationUrl, {
             headers,
@@ -61,6 +61,7 @@ export const initProxyRouter = (deps: Deps) => {
             responseBody = JSON.parse(responseBody);
             isJSON = true;
         } catch (e) {
+            console.log('Tried to JSON parse response, but failed. Assuming response is not JSON.');
         }
 
         const call: RecordedCall = {
@@ -76,6 +77,7 @@ export const initProxyRouter = (deps: Deps) => {
                 return accum;
             }, {}),
             requestIp: req.ip || '',
+            status: fetchRes.status,
         }
 
         deps.sessionManager.getCurrentSession()?.addCallToSession(call);

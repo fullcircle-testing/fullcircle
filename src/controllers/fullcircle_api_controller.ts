@@ -13,7 +13,7 @@ export const initFullCircleApiRouter = ({sessionManager}: Deps) => {
     });
 
     fullcircleApiRouter.post('/record/stop', async (req, res) => {
-        const message = sessionManager.getCurrentSession()?.logRecordedCalls();
+        const message = await sessionManager.finishCurrentSession();
         res.send(message);
     });
 
