@@ -1,14 +1,10 @@
 import express from 'express';
+import {FullCircleInstance, SubscriptionFunc} from '../fullcircle';
 
 type PathHandlerPair = {
     path: string;
     handler: express.Handler;
     called: boolean;
-}
-
-type FullCircleInstance = {
-    subscribeToRequests: (handler: express.Handler) => void;
-    unsubscribeToRequests: (handler: express.Handler) => void;
 }
 
 export class TestHarness {
@@ -22,26 +18,28 @@ export class TestHarness {
         this.fc.subscribeToRequests(this.onRequest);
     }
 
-    private onRequest: express.Handler = (req, res, next) => {
+    private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
         const path = req.originalUrl;
+
+        // gets first registered mock that hasn't been called
         const mock = this.registeredMocks.find(m => m.path === path && !m.called);
         if (mock) {
             mock.called = true;
 
             mock.handler(req, res, next);
-            return;
+            return true;
         }
 
         const passthrough = this.registeredMocks.find(m => m.path === path && !m.called);
         if (passthrough) {
             passthrough.called = true;
 
-            // in reality this needs to be passed to the proxy middleware
+            // we are mocking but in reality this needs to be passed to the proxy middleware
             passthrough.handler(req, res, next);
-            return;
+            return true;
         }
 
-        throw new Error(`Unexpected request to path ${path}`);
+        return false;
     }
 
     private runAssertions = async () => {
@@ -65,9 +63,14 @@ export class TestHarness {
                 errors.push(`Did not receive request to proxy for ${pt.path}`);
             }
         }
+
+        // console.log(messages);
+        if (errors.length) {
+            throw new Error(`harness assertions failed:\n${errors.join('\n')}`);
+        }
     }
 
-    mock = (path: string, handler: express.Handler) => {
+    mock = (originalHost: string, path: string, handler: express.Handler) => {
         this.registeredMocks.push({path, handler, called: false});
     }
 
@@ -79,9 +82,4 @@ export class TestHarness {
         this.fc.unsubscribeToRequests(this.onRequest);
         await this.runAssertions();
     }
-}
-
-export const newHarness = (fc: FullCircleInstance): TestHarness => {
-    const h = new TestHarness(fc);
-    return h;
 }
