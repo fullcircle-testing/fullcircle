@@ -22,6 +22,7 @@ export class FullCircleInstance {
 
     initialize = async () => {
         this.expressApp.use(this.initializeSubscriptionRouter());
+        this.expressApp.use(this.initializeNotFoundRouter());
 
         const {listenAddress} = this.options;
 
@@ -31,7 +32,7 @@ export class FullCircleInstance {
 
         return new Promise<void>(resolve => {
             this.server = this.expressApp.listen(listenAddress, () => {
-                console.log(`Listening on ${listenAddress}`);
+                console.log(`fullcircle test harness listening on ${listenAddress}`);
                 resolve();
             });
         });
@@ -47,6 +48,18 @@ export class FullCircleInstance {
             }
 
             next();
+        });
+
+        return router;
+    };
+
+    private initializeNotFoundRouter = (): express.Router => {
+        const router = express.Router();
+        router.use(async (req, res, next) => {
+            const errMsg = `FC server received unexpected request. No registered mocks for ${req.originalUrl}`;
+
+            res.statusCode = 404;
+            res.json({error: errMsg});
         });
 
         return router;
