@@ -15,9 +15,9 @@ describe('Harness tests', () => {
 
         let blockedFinished = false;
         {
-            await using th = fc.harness();
+            await using th = fc.harness('api.github.com');
 
-            th.mock('api.github.com', '/api/repos', (req, res) => {
+            th.mock('/api/repos', (req, res) => {
                 res.json({data: 'My mocked data'});
             });
 
@@ -48,9 +48,9 @@ describe('Harness tests', () => {
 
         let blockedFinished = false;
         await (async () => {
-            await using th = fc.harness();
+            await using th = fc.harness('api.github.com');
 
-            th.mock('api.github.com', '/api/repos', (req, res) => {
+            th.mock('/api/repos', (req, res) => {
                 res.json({data: 'My mocked data'});
             });
 
@@ -82,9 +82,9 @@ describe('Harness tests', () => {
 
         let blockedFinished = false;
         {
-            await using th = fc.harness();
+            await using th = fc.harness('api.github.com');
 
-            th.mock('api.github.com', '/api/repos', (req, res) => {
+            th.mock('/api/repos', (req, res) => {
                 res.json({data: 'My mocked data'});
             });
 
@@ -118,8 +118,8 @@ describe('Harness tests', () => {
 
         let blockedFinished = false;
         await (async () => {
-            await using th = fc.harness();
-            th.mock('api.github.com', '/api/repos', (req, res) => {
+            await using th = fc.harness('api.github.com');
+            th.mock('/api/repos', (req, res) => {
                 res.json({data: 'My mocked data'});
             });
 

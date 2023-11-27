@@ -6,7 +6,7 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "ts-node-dev src/index.ts",
-    "test": "jest"
+    "test": "jest && npm test --prefix example_app/server"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
     "express-http-proxy": "^2.0.0"
   }
 }

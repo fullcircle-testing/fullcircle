@@ -1,4 +1,6 @@
 import express from 'express';
+require('express-async-errors');
+
 import {TestHarness} from './harness/harness';
 import {Server} from 'http';
 
@@ -78,9 +80,9 @@ export class FullCircleInstance {
         this.subscriptions = [...this.subscriptions.slice(0, index), ...this.subscriptions.slice(index + 1)];
     };
 
-    harness = () => new TestHarness(this);
+    harness = (originalHost: string) => new TestHarness(this, originalHost);
 
-    [Symbol.asyncDispose] = async () => {
+    close = async () => {
         return new Promise<void>((resolve, reject) => {
             if (!this.server) {
                 resolve();
@@ -97,6 +99,8 @@ export class FullCircleInstance {
             });
         });
     }
+
+    [Symbol.asyncDispose] = this.close;
 }
 
 export const fullcircle = async (options: FullCircleOptions) => {

@@ -1,25 +1,40 @@
 import express from 'express';
 import {FullCircleInstance, SubscriptionFunc} from '../fullcircle';
 
-type PathHandlerPair = {
+type PathHandlerClump = {
     path: string;
     handler: express.Handler;
     called: boolean;
 }
 
 export class TestHarness {
-    private registeredMocks: PathHandlerPair[] = [];
-    private registeredPassthroughs: PathHandlerPair[] = [];
+    private registeredMocks: PathHandlerClump[] = [];
+    private registeredPassthroughs: PathHandlerClump[] = [];
     private fc: FullCircleInstance;
+    private originalHost: string;
 
-    constructor(fc: FullCircleInstance) {
+    constructor(fc: FullCircleInstance, originalHost: string) {
         this.fc = fc;
+        this.originalHost = originalHost;
 
         this.fc.subscribeToRequests(this.onRequest);
     }
 
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
         const path = req.originalUrl;
+
+        const originalHost = req.headers.original_host;
+        if (!originalHost) {
+            return false;
+        }
+
+        if (typeof originalHost !== 'string') {
+            return false;
+        }
+
+        if (this.originalHost !== originalHost) {
+            return false;
+        }
 
         // gets first registered mock that hasn't been called
         const mock = this.registeredMocks.find(m => m.path === path && !m.called);
@@ -70,7 +85,7 @@ export class TestHarness {
         }
     }
 
-    mock = (originalHost: string, path: string, handler: express.Handler) => {
+    mock = (path: string, handler: express.Handler) => {
         this.registeredMocks.push({path, handler, called: false});
     }
 
