@@ -1,0 +1,21 @@
+{
+  "start": "2023-11-27T04-12-10.942Z",
+  "endTime": "2023-11-27T04-12-11.139Z",
+  "numCalls": 2,
+  "calls": [
+    {
+      "host": "https://jsonplaceholder.typicode.com",
+      "path": "/todos/1",
+      "method": "GET",
+      "time": "2023-11-27T04:12:11.070Z",
+      "fname": "data_logs/2023-11-27T04-12-10.942Z__2023-11-27T04-12-11.139Z/todos_1/GET_2023-11-27T04-12-11.070Z.json"
+    },
+    {
+      "host": "https://jsonplaceholder.typicode.com",
+      "path": "/posts",
+      "method": "GET",
+      "time": "2023-11-27T04:12:11.135Z",
+      "fname": "data_logs/2023-11-27T04-12-10.942Z__2023-11-27T04-12-11.139Z/posts/GET_2023-11-27T04-12-11.135Z.json"
+    }
+  ]
+}

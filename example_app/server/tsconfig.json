@@ -4,6 +4,7 @@
     "jsxFactory": "Html.createElement",
     "jsxFragmentFactory": "Html.Fragment",
     "plugins": [{ "name": "@kitajs/ts-html-plugin" }],
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": false,
     "target": "es2021",
     "module": "commonjs",
@@ -12,6 +13,6 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "outDir": "dist"
+    "outDir": "dist",
   }
 }

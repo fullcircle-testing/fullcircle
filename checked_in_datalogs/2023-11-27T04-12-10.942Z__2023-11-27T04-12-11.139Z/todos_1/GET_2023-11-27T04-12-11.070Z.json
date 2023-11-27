@@ -1,0 +1,49 @@
+{
+  "time": "2023-11-27T04:12:11.070Z",
+  "host": "https://jsonplaceholder.typicode.com",
+  "requestMethod": "GET",
+  "requestPath": "/todos/1",
+  "requestBody": {},
+  "responseBody": {
+    "userId": 1,
+    "id": 1,
+    "title": "delectus aut autem",
+    "completed": false
+  },
+  "requestHeaders": {
+    "original_host": "jsonplaceholder.typicode.com",
+    "accept": "*/*",
+    "user-agent": "node-fetch/1.0 (+https://github.com/bitinn/node-fetch)",
+    "accept-encoding": "gzip,deflate",
+    "host": "localhost:3000",
+    "connection": "close"
+  },
+  "responseHeaders": {
+    "date": "Mon, 27 Nov 2023 04:12:11 GMT",
+    "content-type": "application/json; charset=utf-8",
+    "transfer-encoding": "chunked",
+    "connection": "close",
+    "x-powered-by": "Express",
+    "x-ratelimit-limit": "1000",
+    "x-ratelimit-remaining": "999",
+    "x-ratelimit-reset": "1698832845",
+    "vary": "Origin, Accept-Encoding",
+    "access-control-allow-credentials": "true",
+    "cache-control": "max-age=43200",
+    "pragma": "no-cache",
+    "expires": "-1",
+    "x-content-type-options": "nosniff",
+    "etag": "W/\"53-hfEnumeNh6YirfjyjaujcOPPT+s\"",
+    "via": "1.1 vegur",
+    "cf-cache-status": "HIT",
+    "age": "8009",
+    "report-to": "{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v3?s=XElwUZ%2FL0YmQhpJc8oy51AOsZEJbB4kuSs6c3ou2Lf6vh48qahv3h82HI7Zi0WMg7Ds20xefp0zhU8NxrLLNcQhMwaw5eh%2BnimWw3ousOxqQIwQPNC%2BUyY%2FqjxuKtXbpn2odrLmZYT6DoE1Qb5xg\"}],\"group\":\"cf-nel\",\"max_age\":604800}",
+    "nel": "{\"success_fraction\":0,\"report_to\":\"cf-nel\",\"max_age\":604800}",
+    "server": "cloudflare",
+    "cf-ray": "82c78809b98913f2-ORD",
+    "content-encoding": "gzip",
+    "alt-svc": "h3=\":443\"; ma=86400"
+  },
+  "requestIp": "::ffff:127.0.0.1",
+  "status": 200
+}

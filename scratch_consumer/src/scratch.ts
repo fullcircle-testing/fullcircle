@@ -1,4 +1,6 @@
-const host = 'http://localhost:1334';
+import fetch from 'node-fetch';
+
+const host = 'http://localhost:3000';
 
 const destinationHost = 'jsonplaceholder.typicode.com';
 

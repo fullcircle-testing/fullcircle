@@ -6,6 +6,8 @@ import request from 'supertest';
 import {FullCircleInstance, fullcircle} from '../../../src/fullcircle';
 import {initApp} from '../src/server';
 
+import savedPostsTestData from './testdata/posts.json';
+
 describe('Example app', () => {
     let fc: FullCircleInstance;
     let app: express.Express;
@@ -23,19 +25,17 @@ describe('Example app', () => {
     });
 
     it('integrates with fullcircle', async () => {
-        {
-            await using th = fc.harness('jsonplaceholder.typicode.com');
+        await using th = fc.harness('jsonplaceholder.typicode.com');
 
-            th.mock('/posts', (req, res) => {
-                res.json({data: 'My mocked data'});
-            });
+        th.mock('/posts', (req, res) => {
+            res.json({data: 'My mocked data'});
+        });
 
-            const response = await request(app)
-                .get('/api/posts')
-                .expect(200)
+        const response = await request(app)
+            .get('/api/posts')
+            .expect(200)
 
-            expect(response.body).toEqual({data: 'My mocked data'});
-        }
+        expect(response.body).toEqual({data: 'My mocked data'});
     });
 
     it('integrates with fullcircle - multiple requests', async () => {
@@ -84,5 +84,22 @@ describe('Example app', () => {
             expect(response3.body).toEqual({data: 'My third mocked data'});
             expect(response4.body).toEqual({data: 'My fourth mocked data'});
         }
+    });
+
+    it('integrates with fullcircle - with stored data', async () => {
+        await using th = fc.harness('jsonplaceholder.typicode.com');
+
+        const mockResponse = savedPostsTestData;
+
+        th.mock('/posts', (req, res) => {
+            res.json(mockResponse);
+        });
+
+        const response = await request(app)
+            .get('/api/posts')
+            .expect(200)
+
+        expect(response.body).toEqual(mockResponse);
+        expect(mockResponse).toHaveLength(100);
     });
 });
