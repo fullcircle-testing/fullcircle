@@ -1,5 +1,7 @@
 import {initApp} from './express_app';
 import {SessionManager} from './session_recording/sessions_manager';
+import {initTerminal} from './terminal_interaction';
+import {AppDependencies} from './types';
 
 const defaultDestination = process.env.DESTINATION;
 const useDestinationHostHeader = process.env.USE_DESTINATION_HOST_HEADER;
@@ -9,7 +11,10 @@ if (!defaultDestination && useDestinationHostHeader !== 'true') {
 }
 
 const sessionManager = new SessionManager();
-const app = initApp({sessionManager, defaultDestination});
+const deps: AppDependencies = {sessionManager, defaultDestination};
+
+initTerminal(deps);
+const app = initApp(deps);
 
 const port = process.env.PORT || 3000;
 

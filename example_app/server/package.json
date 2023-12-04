@@ -5,6 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "ts-node src/entrypoints/main_entrypoint.ts",
+    "start-with-fc": "PORT=6000 FULLCIRCLE_HOST=http://localhost:8000 ts-node src/entrypoints/fc_entrypoint.ts",
+    "test-curl": "curl http://localhost:6000/api/todos/1",
+    "fc-recorder": "PORT=8000 DESTINATION=jsonplaceholder.typicode.com DATA_LOG_OUT_DIR=\"$PWD/data_logs\" npm start --prefix ../../packages/recorder",
     "test": "jest",
     "tsc": "tsc"
   },

@@ -8,6 +8,7 @@ export class RecordingSession {
 
     addCallToSession = (call: RecordedCall) => {
         this.recordedCalls.push(call);
+        this.logRecordedCalls();
     }
 
     logRecordedCalls = async (): Promise<string> => {
@@ -19,7 +20,7 @@ export class RecordingSession {
             dataLogsFolder = './data_logs';
         }
 
-        const topFolderName = `${dataLogsFolder}/${startTimeStr}__${endTime}`;
+        const topFolderName = `${dataLogsFolder}/${startTimeStr}`;
         await fs.mkdir(topFolderName, {recursive: true});
 
         const withTopFolder = (path: string) => topFolderName + '/' + path;

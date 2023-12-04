@@ -22,5 +22,10 @@ export const initApp = (deps: ExampleAppDependencies) => {
         res.json(posts);
     });
 
+    app.get('/api/todos/:id', async (req, res) => {
+        const todos = await externalClient.getTodo(req.params.id);
+        res.json(todos);
+    });
+
     return app;
 }

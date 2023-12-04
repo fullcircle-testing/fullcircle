@@ -10,7 +10,7 @@ export class ExternalClient {
         return this.doGet(path);
     };
 
-    getTodo = (id: number) => {
+    getTodo = (id: number | string) => {
         const path = `/todos/${id}`;
         return this.doGet(path);
     };
