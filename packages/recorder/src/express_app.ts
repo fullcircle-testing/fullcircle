@@ -1,8 +1,8 @@
 import express from 'express';
 
-import {initFullCircleApiRouter} from '../controllers/fullcircle_api_controller';
+import {initFullCircleApiRouter} from './controllers/fullcircle_api_controller';
 
-import {initProxyRouter} from '../controllers/proxy_controller';
+import {initProxyRouter} from './controllers/proxy_controller';
 
 import {AppDependencies} from './types';
 

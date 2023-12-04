@@ -2,7 +2,7 @@ import {MockServer} from 'jest-mock-server';
 import request from 'supertest';
 
 import {initApp} from '../src/express_app';
-import {SessionManager} from '../session_recording.ts/sessions_manager';
+import {SessionManager} from '../src/session_recording.ts/sessions_manager';
 
 describe('Test proxy', () => {
     const server = new MockServer();

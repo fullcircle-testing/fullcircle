@@ -1,6 +1,6 @@
 import {IncomingHttpHeaders} from 'http';
 
-import {SessionManager} from '../session_recording.ts/sessions_manager';
+import {SessionManager} from './session_recording.ts/sessions_manager';
 
 export type AppDependencies = {
     sessionManager: SessionManager;
