@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "npm run recorder",
-    "recorder": "npm start --prefix packages/recorder",
+    "recorder": "DATA_LOG_OUT_DIR=\"$PWD/data_logs\" npm start --prefix packages/recorder",
     "postinstall": "npm i --prefix example_app/server",
     "test": "jest && npm test --prefix example_app/server"
   },
