@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 
-import {RecordedCall} from '../types';
+import {RecordedCall} from '../src/types';
 
 export class RecordingSession {
     private startTime: Date = new Date();

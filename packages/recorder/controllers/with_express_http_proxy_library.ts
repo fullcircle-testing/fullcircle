@@ -2,7 +2,7 @@ import express from 'express';
 import proxy from 'express-http-proxy';
 import {IncomingHttpHeaders} from 'http';
 
-import {AppDependencies, RecordedCall} from '../types';
+import {AppDependencies, RecordedCall} from '../src/types';
 
 const HTTP_HEADER_ORIGINAL_HOST = 'ORIGINAL_HOST';
 

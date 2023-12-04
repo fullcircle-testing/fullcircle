@@ -1,8 +1,9 @@
+import {Server} from 'http';
+
 import express from 'express';
 require('express-async-errors');
 
-import {TestHarness} from './harness/harness';
-import {Server} from 'http';
+import {TestHarness} from './harness';
 
 type ReplaceReturnType<T extends (...a: any) => any, TNewReturn> = (...a: Parameters<T>) => TNewReturn;
 
@@ -33,8 +34,9 @@ export class FullCircleInstance {
         }
 
         return new Promise<void>(resolve => {
-            this.server = this.expressApp.listen(listenAddress, () => {
+            this.server = this.expressApp.listen(listenAddress, async () => {
                 console.log(`fullcircle test harness listening on ${listenAddress}`);
+                await new Promise(r => setTimeout(r, 10));
                 resolve();
             });
         });

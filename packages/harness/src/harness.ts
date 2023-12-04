@@ -1,5 +1,5 @@
 import express from 'express';
-import {FullCircleInstance, SubscriptionFunc} from '../fullcircle';
+import type {FullCircleInstance, SubscriptionFunc} from './fullcircle';
 
 type PathHandlerClump = {
     path: string;

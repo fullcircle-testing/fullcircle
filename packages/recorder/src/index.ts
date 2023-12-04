@@ -1,5 +1,5 @@
 import {initApp} from './express_app';
-import {SessionManager} from './session_recording.ts/sessions_manager';
+import {SessionManager} from '../session_recording.ts/sessions_manager';
 
 const sessionManager = new SessionManager();
 const app = initApp({sessionManager, shouldProxy: true});

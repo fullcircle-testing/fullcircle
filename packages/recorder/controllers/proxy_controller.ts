@@ -1,6 +1,6 @@
 import express from 'express';
 import {SessionManager} from '../session_recording.ts/sessions_manager';
-import {RecordedCall} from '../types';
+import {RecordedCall} from '../src/types';
 
 import fetch from 'node-fetch';
 
