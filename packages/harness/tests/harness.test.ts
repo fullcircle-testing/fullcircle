@@ -154,6 +154,39 @@ describe('Harness tests', () => {
 
         expect(blockedFinished).toBe(true);
     });
+
+    it('harness.mock - real local fetch - using defaultDestination', async () => {
+        await using fc = await fullcircle({
+            listenAddress: 7887,
+            defaultDestination: 'api.github.com',
+        });
+
+        let blockedFinished = false;
+        {
+            await using th = fc.harness('api.github.com');
+
+            th.mock('/api/repos', (req, res) => {
+                res.json({data: 'My mocked data'});
+            });
+
+            const reqPath = '/api/repos';
+
+            try {
+                const fetchRes = await fetch(`http://localhost:7887${reqPath}`);
+                expect(fetchRes.status).toEqual(200);
+
+                const responseBody = await fetchRes.json();
+                expect(responseBody).toEqual({data: 'My mocked data'});
+            } catch (e) {
+                logError(e);
+                expect(e).toBe(null);
+            }
+
+            blockedFinished = true;
+        }
+
+        expect(blockedFinished).toBe(true);
+    });
 });
 
 const logError = (err: any) => {
