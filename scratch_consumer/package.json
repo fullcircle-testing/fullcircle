@@ -1,0 +1,25 @@
+{
+  "name": "scratch_consumer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node src/scratch.ts",
+    "dev": "ts-node-dev src/scratch.ts",
+    "inspect": "code ../data_logs/$(ls ../data_logs | tail -n 1)/summary.json",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.9.2",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.2",
+    "node-fetch": "^2.7.0"
+  }
+}
