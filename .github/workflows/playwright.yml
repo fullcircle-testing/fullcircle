@@ -31,6 +31,10 @@ jobs:
       run: npx playwright install --with-deps
       working-directory: ./example_app/tests-e2e
 
+    - name: Run Server
+      run: PORT=9000 FULLCIRCLE_HOST=http://localhost:8000 npm run start-with-fc &
+      working-directory: ./example_app/server
+
     - name: Run Playwright tests
       working-directory: ./example_app/tests-e2e
       run: npx playwright test
