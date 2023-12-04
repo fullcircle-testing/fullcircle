@@ -19,10 +19,6 @@ export class ExternalClient {
         const fullUrl = `${this.apiUrl}${path}`;
 
         let headers: HeadersInit = {};
-        const originalHostHeader = getOriginalHostHeader(this.apiUrl);
-        if (originalHostHeader) {
-            headers.original_host = originalHostHeader;
-        }
 
         return fetch(fullUrl, {
             headers,

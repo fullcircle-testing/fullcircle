@@ -1,10 +1,15 @@
 import {IncomingHttpHeaders} from 'http';
 
-import {SessionManager} from './session_recording.ts/sessions_manager';
+import {SessionManager} from './session_recording/sessions_manager';
+
+export type RequestDestinationConfig = {
+    externalHost: string;
+    port: string;
+}
 
 export type AppDependencies = {
     sessionManager: SessionManager;
-    shouldProxy: boolean;
+    defaultDestination?: string;
 };
 
 export type RecordedCall = {

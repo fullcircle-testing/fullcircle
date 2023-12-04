@@ -14,7 +14,12 @@ export class RecordingSession {
         const startTimeStr = this.startTime.toISOString().replaceAll(':', '-');
         const endTime = new Date().toISOString().replaceAll(':', '-');
 
-        const topFolderName = `data_logs/${startTimeStr}__${endTime}`;
+        let dataLogsFolder = process.env.DATA_LOG_OUT_DIR;
+        if (!dataLogsFolder) {
+            dataLogsFolder = './data_logs';
+        }
+
+        const topFolderName = `${dataLogsFolder}/${startTimeStr}__${endTime}`;
         await fs.mkdir(topFolderName, {recursive: true});
 
         const withTopFolder = (path: string) => topFolderName + '/' + path;
@@ -37,7 +42,7 @@ export class RecordingSession {
                 host: call.host,
                 path: call.requestPath,
                 method: call.requestMethod,
-                time: call.time, // would be cool to have info on relative time from the start of the session, and measure the duration of the request, and measure the time in between the operations actions in the session
+                time: call.time,
                 fname,
             });
         }

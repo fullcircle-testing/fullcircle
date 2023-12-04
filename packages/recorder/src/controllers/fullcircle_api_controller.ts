@@ -1,6 +1,6 @@
 import express from 'express';
 
-import {SessionManager} from '../session_recording.ts/sessions_manager';
+import {SessionManager} from '../session_recording/sessions_manager';
 
 type Deps = {sessionManager: SessionManager};
 

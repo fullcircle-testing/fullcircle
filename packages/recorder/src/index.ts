@@ -1,5 +1,5 @@
 import {initApp} from './express_app';
-import {SessionManager} from './session_recording.ts/sessions_manager';
+import {SessionManager} from './session_recording/sessions_manager';
 
 const defaultDestination = process.env.DESTINATION;
 const useDestinationHostHeader = process.env.USE_DESTINATION_HOST_HEADER;
