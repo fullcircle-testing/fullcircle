@@ -1,11 +1,9 @@
-/// <reference types="@kitajs/html/htmx.d.ts" />
-
 import express from 'express';
-import Html from '@kitajs/html';
 
-import {ExampleAppDependencies} from './types';
+import {ExampleAppDependencies} from './types/app_dependencies';
 
 import {ExternalClient} from './external_service/external_client';
+import {renderRoot, renderTodos} from './views/root';
 
 export const initApp = (deps: ExampleAppDependencies) => {
     const app = express();
@@ -14,7 +12,15 @@ export const initApp = (deps: ExampleAppDependencies) => {
 
     app.get('/', (req, res) => {
         res.setHeader('content-type', 'text/html');
-        res.end(<html><body>{'yep'}</body></html>);
+        const root = renderRoot();
+        res.end(root);
+    });
+
+    app.get('/views/todos', async (req, res) => {
+        res.setHeader('content-type', 'text/html');
+        const todos = await externalClient.getTodos();
+        const todosRendered = renderTodos(todos);
+        res.end(todosRendered);
     });
 
     app.get('/api/posts', async (req, res) => {
