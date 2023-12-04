@@ -17,7 +17,7 @@ describe('Example app', () => {
     });
 
     beforeAll(async () => {
-        fc = await fullcircle({listenAddress: 7887});
+        fc = await fullcircle({listenAddress: 7887, defaultDestination: 'jsonplaceholder.typicode.com'});
     });
 
     afterAll(async () => {
@@ -25,17 +25,22 @@ describe('Example app', () => {
     });
 
     it('integrates with fullcircle', async () => {
-        await using th = fc.harness('jsonplaceholder.typicode.com');
+        try {
+            await using th = fc.harness('jsonplaceholder.typicode.com');
 
-        th.mock('/posts', (req, res) => {
-            res.json({data: 'My mocked data'});
-        });
+            th.mock('/posts', (req, res) => {
+                res.json({data: 'My mocked data'});
+            });
 
-        const response = await request(app)
+            const response = await request(app)
             .get('/api/posts')
             .expect(200)
 
-        expect(response.body).toEqual({data: 'My mocked data'});
+            expect(response.body).toEqual({data: 'My mocked data'});
+        } catch (e) {
+            console.error(e);
+            expect(e).toBe(null);
+        }
     });
 
     it('integrates with fullcircle - multiple requests', async () => {

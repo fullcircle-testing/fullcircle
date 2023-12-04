@@ -23,16 +23,22 @@ export class TestHarness {
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
         const path = req.originalUrl;
 
-        const originalHost = req.headers.original_host;
-        if (!originalHost) {
-            return false;
+        let destinationHost = this.fc.options.defaultDestination;
+
+        if (!destinationHost) {
+            const originalHost = req.headers.original_host;
+            if (!originalHost) {
+                return false;
+            }
+
+            if (typeof originalHost !== 'string') {
+                return false;
+            }
+
+            destinationHost = originalHost;
         }
 
-        if (typeof originalHost !== 'string') {
-            return false;
-        }
-
-        if (this.originalHost !== originalHost) {
+        if (this.originalHost !== destinationHost) {
             return false;
         }
 

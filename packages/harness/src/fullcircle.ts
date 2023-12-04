@@ -11,6 +11,7 @@ export type SubscriptionFunc = ReplaceReturnType<express.Handler, Promise<boolea
 
 export type FullCircleOptions = {
     listenAddress: string | number | null;
+    defaultDestination?: string;
 };
 
 export class FullCircleInstance {
@@ -19,7 +20,7 @@ export class FullCircleInstance {
     public expressApp: express.Express;
     private server?: Server;
 
-    constructor(private options: FullCircleOptions) {
+    constructor(public options: FullCircleOptions) {
         this.expressApp = express();
     }
 
