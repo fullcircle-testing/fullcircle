@@ -1,5 +1,5 @@
 import {JSON_PLACEHOLDER_URL} from '../constants';
-import {ExampleAppDependencies} from '../types';
+import {ExampleAppDependencies} from '../types/app_dependencies';
 
 import {initApp} from '../server';
 
@@ -11,5 +11,5 @@ const app = initApp(deps);
 
 const port = process.env.PORT || 6001;
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`);
+    console.log(`Example app listening at http://localhost:${port}`);
 });

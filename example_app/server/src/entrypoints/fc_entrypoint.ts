@@ -1,5 +1,5 @@
 import {initApp} from '../server';
-import {ExampleAppDependencies} from '../types';
+import {ExampleAppDependencies} from '../types/app_dependencies';
 
 const FULLCIRCLE_HOST = process.env.FULLCIRCLE_HOST;
 if (!FULLCIRCLE_HOST) {
@@ -13,7 +13,7 @@ const deps: ExampleAppDependencies = {
 
 const app = initApp(deps);
 
-const port = process.env.PORT || 6000;
+const port = process.env.PORT || 7000;
 app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`);
+    console.log(`Example app listening at http://localhost:${port}`);
 });
