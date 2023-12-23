@@ -43,8 +43,61 @@ export class FullCircleInstance {
         });
     }
 
-    private initializeSubscriptionRouter = (): express.Router => {
+    private initializeSubscriptionRouter = (): express.Router & FullCircleInstance => {
         const router = express.Router();
+
+        // so this will actually return (express.Router & TestHarness) eventually
+        // fc.mock will return router (express.Router & TestHarness)
+        // fc.harness will go away, replaced by fc.mock
+
+        // fc.passthrough will work a little differently, in that you won't provide an express.Handler to its methods
+        // pt = fc.passthrough('api.github.com'); // or infer default host
+        // pt.use('/api/repos/:repoId', 'GET', (req, resBody) => {
+
+        // });
+
+        // don't support passthrough yet. unclear use cases atm. this is supposed to be a closed system.
+
+        const p = new Proxy(router, {
+            get: (target, originalProp: (keyof typeof router) | (keyof FullCircleInstance), receiver) => {
+                if (originalProp in this) {
+                    const prop = originalProp as keyof FullCircleInstance;
+                    // return this[prop];
+                    return Reflect.get(target, prop, receiver);
+                }
+
+                const prop = originalProp as keyof typeof router;
+
+                switch (prop) {
+                    case 'stack':
+                    case 'route':
+                    case 'param':
+                        return target[prop];
+                }
+
+                const value = target[prop];
+                return (url: string, ...handlers: express.Handler[]) => {
+                    value(url, (req, res, next) => {
+                        // called = true;
+                        const index = p.stack.findIndex(h => Boolean(h.path))
+                        p.stack = [...p.stack.slice(0, index), ...p.stack.slice(index + 1)];
+                        [...handlers].reverse().reduce((current, previous) => {
+                            if (!previous) {
+                                return current;
+                            }
+
+                            return
+                        }, null);
+                        // handler(req, res, next);
+                    });
+                };
+            },
+        });
+
+        p.get('/todos/:id', (req, res) => {
+            req.params.id;
+        });
+
         router.use(async (req, res, next) => {
             for (const sub of this.subscriptions) {
                 if (await sub(req, res, next)) {
@@ -55,7 +108,7 @@ export class FullCircleInstance {
             next();
         });
 
-        return router;
+        return Object.assign(p, this);
     };
 
     private initializeNotFoundRouter = (): express.Router => {

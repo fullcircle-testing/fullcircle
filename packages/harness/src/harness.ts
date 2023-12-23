@@ -99,8 +99,12 @@ export class TestHarness {
         this.registeredPassthroughs.push({path, handler, called: false});
     }
 
-    [Symbol.asyncDispose] = async () => {
+    close = async () => {
         this.fc.unsubscribeToRequests(this.onRequest);
         await this.runAssertions();
+    }
+
+    [Symbol.asyncDispose] = async () => {
+        await this.close();
     }
 }
