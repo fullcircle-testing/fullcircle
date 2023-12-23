@@ -14,8 +14,11 @@ export type FullCircleOptions = {
     defaultDestination?: string;
 };
 
+export type HarnessRouter = express.Router & TestHarness;
+
 export class FullCircleInstance {
     private subscriptions: SubscriptionFunc[] = [];
+    private subscriptionRouter!: express.Router;
 
     public expressApp: express.Express;
     private server?: Server;
@@ -25,7 +28,8 @@ export class FullCircleInstance {
     }
 
     initialize = async () => {
-        this.expressApp.use(this.initializeSubscriptionRouter());
+        this.subscriptionRouter = this.initializeSubscriptionRouter();
+        this.expressApp.use(this.subscriptionRouter);
         this.expressApp.use(this.initializeNotFoundRouter());
 
         const {listenAddress} = this.options;
@@ -45,18 +49,28 @@ export class FullCircleInstance {
 
     private initializeSubscriptionRouter = (): express.Router => {
         const router = express.Router();
-        router.use(async (req, res, next) => {
-            for (const sub of this.subscriptions) {
-                if (await sub(req, res, next)) {
-                    return;
-                }
-            }
-
-            next();
-        });
 
         return router;
-    };
+    }
+
+    harness = (originalHost: string) => {
+        const router = express.Router();
+        const th = new TestHarness(this, originalHost, router, async () => {
+            const r = this.subscriptionRouter;
+
+            // });
+
+            // TODO: clean up the adhoc router
+
+            // const index = r.stack.findIndex(h => Boolean(h.path));
+            // r.stack = [...r.stack.slice(0, index), ...r.stack.slice(index + 1)];
+            // console.log(r.stack);
+        });
+
+        this.subscriptionRouter.use(th.getProxyRouter());
+
+        return th;
+    }
 
     private initializeNotFoundRouter = (): express.Router => {
         const router = express.Router();
@@ -82,8 +96,6 @@ export class FullCircleInstance {
 
         this.subscriptions = [...this.subscriptions.slice(0, index), ...this.subscriptions.slice(index + 1)];
     };
-
-    harness = (originalHost: string) => new TestHarness(this, originalHost);
 
     close = async () => {
         return new Promise<void>((resolve, reject) => {

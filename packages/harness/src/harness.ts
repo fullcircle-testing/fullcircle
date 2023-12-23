@@ -10,15 +10,79 @@ type PathHandlerClump = {
 export class TestHarness {
     private registeredMocks: PathHandlerClump[] = [];
     private registeredPassthroughs: PathHandlerClump[] = [];
+    private originalRouter: express.Router;
+    proxyRouter: express.Router;
+    get: typeof this.proxyRouter.get;
+    put: typeof this.proxyRouter.put;
+    post: typeof this.proxyRouter.post;
+    delete: typeof this.proxyRouter.delete;
+
     private fc: FullCircleInstance;
     private originalHost: string;
 
-    constructor(fc: FullCircleInstance, originalHost: string) {
+    constructor(fc: FullCircleInstance, originalHost: string, router: express.Router, removeRouter: () => void) {
         this.fc = fc;
         this.originalHost = originalHost;
+        this.originalRouter = router;
+        this.proxyRouter = this.newProxyRouter(this.originalRouter);
+
+        this.get = this.proxyRouter.get.bind(this.proxyRouter);
+        this.put = this.proxyRouter.put.bind(this.proxyRouter);
+        this.post = this.proxyRouter.post.bind(this.proxyRouter);
+        this.delete = this.proxyRouter.delete.bind(this.proxyRouter);
 
         this.fc.subscribeToRequests(this.onRequest);
     }
+
+    private handleCalled = (path: string, method: string) => {
+        console.log('Called', path, method);
+
+        const mock = this.registeredMocks.find(m => m.path === path && !m.called);
+        if (mock) {
+            mock.called = true;
+        }
+
+        const p = this.proxyRouter;
+        const index = p.stack.findIndex(h => Boolean(h.path))
+        p.stack = [...p.stack.slice(0, index), ...p.stack.slice(index + 1)];
+    }
+
+    getProxyRouter = (): express.Router => {
+        return this.proxyRouter;
+    }
+
+    private newProxyRouter = (router: express.Router): express.Router => {
+        return new Proxy(router, {
+            get: (target, originalProp: keyof typeof router, receiver) => {
+                const prop = originalProp as keyof typeof router;
+                const value = Reflect.get(target, prop, receiver);
+
+                switch (prop) {
+                    case 'get':
+                    case 'put':
+                    case 'post':
+                    case 'delete':
+                        // case 'use':
+                        break;
+                    default:
+                        return value;
+                }
+
+                const func = value as typeof target.get | typeof target.put | typeof target.post | typeof target.delete;
+
+                return (path: string, ...handlers: express.Handler[]) => {
+                    const handler: express.Handler = (req, res, next) => {
+                        this.handleCalled(path, prop);
+                        next();
+                    }
+
+                    this.registeredMocks.push({path, handler, called: false});
+
+                    Reflect.apply(func, target, [path, handler, ...handlers]);
+                };
+            },
+        });
+    };
 
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
         const path = req.originalUrl;
@@ -91,16 +155,16 @@ export class TestHarness {
         }
     }
 
-    mock = (path: string, handler: express.Handler) => {
-        this.registeredMocks.push({path, handler, called: false});
-    }
-
     passthrough = (path: string, handler: express.Handler) => {
         this.registeredPassthroughs.push({path, handler, called: false});
     }
 
-    [Symbol.asyncDispose] = async () => {
+    close = async () => {
         this.fc.unsubscribeToRequests(this.onRequest);
         await this.runAssertions();
+    }
+
+    [Symbol.asyncDispose] = async () => {
+        await this.close();
     }
 }

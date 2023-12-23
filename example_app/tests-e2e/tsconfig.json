@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+      "verbatimModuleSyntax": false,
+      "target": "es2021",
+      "module": "commonjs",
+      "allowSyntheticDefaultImports": true,
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "strict": true,
+      "skipLibCheck": true
+    }
+  }
