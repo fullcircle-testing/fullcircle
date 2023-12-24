@@ -12,6 +12,8 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.34.3-jammy
     steps:
 
     - uses: actions/checkout@v3
@@ -29,10 +31,6 @@ jobs:
 
     - name: Install playwright dependencies
       run: npm i
-      working-directory: ./example_app/tests-e2e
-
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
       working-directory: ./example_app/tests-e2e
 
     - name: Run Server
