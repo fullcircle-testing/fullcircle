@@ -23,6 +23,10 @@ jobs:
     - name: Install fc dependencies
       run: npm i
 
+    - name: Install example app npm dependencies
+      run: npm i
+      working-directory: ./example_app/server
+
     - name: Install playwright dependencies
       run: npm i
       working-directory: ./example_app/tests-e2e
