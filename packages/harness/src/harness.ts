@@ -12,10 +12,10 @@ export class TestHarness {
     private registeredPassthroughs: PathHandlerClump[] = [];
     private originalRouter: express.Router;
     proxyRouter: express.Router;
-    get: typeof this.proxyRouter.get;
-    put: typeof this.proxyRouter.put;
-    post: typeof this.proxyRouter.post;
-    delete: typeof this.proxyRouter.delete;
+    get: express.Router['get'];
+    put: express.Router['put'];
+    post: express.Router['post'];
+    delete: express.Router['delete'];
 
     private fc: FullCircleInstance;
     private originalHost: string;
