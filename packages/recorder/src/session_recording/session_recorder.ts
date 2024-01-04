@@ -2,17 +2,33 @@ import fs from 'node:fs/promises';
 
 import {RecordedCall} from '../types';
 
+type HttpRequestSummary = {
+    host: string;
+    path: string;
+    method: string;
+    time: string;
+    filename: string;
+};
+
+type SessionSummary = {
+    sessionName: string;
+    startTime: string;
+    endTime: string;
+    numCalls: number;
+    calls: HttpRequestSummary[];
+}
+
 export class RecordingSession {
     private startTime: Date = new Date();
     private recordedCalls: RecordedCall[] = [];
 
     addCallToSession = (call: RecordedCall) => {
         this.recordedCalls.push(call);
-        this.logRecordedCalls();
+        // this.logRecordedCalls('');
     }
 
-    logRecordedCalls = async (): Promise<string> => {
-        const startTimeStr = this.startTime.toISOString().replaceAll(':', '-');
+    logRecordedCalls = async (sessionName: string): Promise<string> => {
+        const startTime = this.startTime.toISOString().replaceAll(':', '-');
         const endTime = new Date().toISOString().replaceAll(':', '-');
 
         let dataLogsFolder = process.env.DATA_LOG_OUT_DIR;
@@ -20,12 +36,17 @@ export class RecordingSession {
             dataLogsFolder = './data_logs';
         }
 
-        const topFolderName = `${dataLogsFolder}/${startTimeStr}`;
-        await fs.mkdir(topFolderName, {recursive: true});
+        let topFolderName = `${dataLogsFolder}/${startTime}__${sessionName}`;
+        try {
+            await fs.mkdir(topFolderName, {recursive: true});
+        } catch (e) {
+            topFolderName = `${dataLogsFolder}/${startTime}`;
+            await fs.mkdir(topFolderName, {recursive: true});
+        }
 
         const withTopFolder = (path: string) => topFolderName + '/' + path;
 
-        const calls = [];
+        const calls: HttpRequestSummary[] = [];
 
         for (const call of this.recordedCalls) {
             let requestPath = call.requestPath;
@@ -36,28 +57,29 @@ export class RecordingSession {
             const subpath = withTopFolder(`${requestPath.replaceAll('/', '_')}`);
             await fs.mkdir(subpath, {recursive: true});
 
-            const fname = `${subpath}/${call.requestMethod}_${call.time.replaceAll(':', '-')}.json`;
-            await fs.writeFile(fname, JSON.stringify(call, null, 2));
+            const filename = `${subpath}/${call.requestMethod}_${call.time.replaceAll(':', '-')}.json`;
+            await fs.writeFile(filename, JSON.stringify(call, null, 2));
 
             calls.push({
                 host: call.host,
                 path: call.requestPath,
                 method: call.requestMethod,
                 time: call.time,
-                fname,
+                filename,
             });
         }
 
-        const summary = {
-            start: startTimeStr,
-            endTime: endTime,
+        const summary: SessionSummary = {
+            sessionName,
+            startTime,
+            endTime,
             numCalls: this.recordedCalls.length,
             calls,
         }
 
         await fs.writeFile(withTopFolder('summary.json'), JSON.stringify(summary, null, 2));
 
-        const message = `Recorded ${this.recordedCalls.length} calls\nStart ${this.startTime.toISOString()} End ${endTime}`;
+        const message = `Finished session "${sessionName}"\nRecorded ${this.recordedCalls.length} calls\nStart ${this.startTime.toISOString()} End ${endTime}`;
         return message;
     }
 }
