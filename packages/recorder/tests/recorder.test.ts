@@ -28,7 +28,7 @@ describe('Test proxy', () => {
 
         const sessionManager = new SessionManager();
         sessionManager.startNewSession();
-        const app = initApp({sessionManager});
+        const app = initApp({sessionManager, includeHeaders: false});
 
         const response = await request(app)
             .get('/user')
@@ -39,8 +39,12 @@ describe('Test proxy', () => {
 
         expect(route).toHaveBeenCalledTimes(1);
 
-        const message = await sessionManager.finishCurrentSession();
-        expect(message?.split('\n')[0]).toEqual('Recorded 1 calls');
+        const message = await sessionManager.finishCurrentSession('first session');
+
+        const lines = message?.split('\n');
+        expect(lines?.length).toBeGreaterThan(2);
+        expect(lines![0]!).toEqual('Finished session \"first session\"');
+        expect(lines![1]!).toEqual('Recorded 1 calls');
     });
 
     it('Receives response defined by test. Use default destination', async () => {
@@ -60,7 +64,7 @@ describe('Test proxy', () => {
 
         const sessionManager = new SessionManager();
         sessionManager.startNewSession();
-        const app = initApp({sessionManager, defaultDestination: url.toString()});
+        const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
 
         const response = await request(app)
             .get('/user')
@@ -70,7 +74,11 @@ describe('Test proxy', () => {
 
         expect(route).toHaveBeenCalledTimes(1);
 
-        const message = await sessionManager.finishCurrentSession();
-        expect(message?.split('\n')[0]).toEqual('Recorded 1 calls');
+        const message = await sessionManager.finishCurrentSession('my session');
+
+        const lines = message?.split('\n');
+        expect(lines?.length).toBeGreaterThan(2);
+        expect(lines![0]!).toEqual('Finished session \"my session\"');
+        expect(lines![1]!).toEqual('Recorded 1 calls');
     });
 });

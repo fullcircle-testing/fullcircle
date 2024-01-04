@@ -26,6 +26,8 @@ const recordRequest = (proxyRes: ResponseInfo, proxyResBody: string, req: expres
         console.log('Tried to JSON parse response, but failed. Assuming response is not JSON.');
     }
 
+    const includeHeaders = deps.includeHeaders;
+
     const call: RecordedCall = {
         time: new Date().toISOString(),
         host: destinationHost,
@@ -33,8 +35,8 @@ const recordRequest = (proxyRes: ResponseInfo, proxyResBody: string, req: expres
         requestPath: reqPath,
         requestBody: req.body,
         responseBody,
-        requestHeaders: req.headers,
-        responseHeaders,
+        requestHeaders: includeHeaders ? req.headers : null,
+        responseHeaders: includeHeaders ? responseHeaders : null,
         requestIp: req.ip || '',
         status: proxyRes.statusCode || 0,
     }

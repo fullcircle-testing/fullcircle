@@ -13,7 +13,7 @@ export const initFullCircleApiRouter = ({sessionManager}: Deps) => {
     });
 
     fullcircleApiRouter.post('/record/stop', async (req, res) => {
-        const message = await sessionManager.finishCurrentSession();
+        const message = await sessionManager.finishCurrentSession('');
         res.send(message);
     });
 

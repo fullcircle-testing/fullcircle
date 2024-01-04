@@ -10,6 +10,7 @@ export type RequestDestinationConfig = {
 export type AppDependencies = {
     sessionManager: SessionManager;
     defaultDestination?: string;
+    includeHeaders: boolean;
 };
 
 export type RecordedCall = {
@@ -17,9 +18,9 @@ export type RecordedCall = {
     host: string;
     requestMethod: string;
     requestPath: string;
-    requestHeaders: IncomingHttpHeaders;
+    requestHeaders: IncomingHttpHeaders | null;
     requestBody?: object;
-    responseHeaders: IncomingHttpHeaders;
+    responseHeaders: IncomingHttpHeaders | null;
     responseBody: string | object;
     status: number;
     requestIp: string;
