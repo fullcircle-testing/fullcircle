@@ -10,8 +10,14 @@ if (!defaultDestination && useDestinationHostHeader !== 'true') {
     console.log('Please provide a destination via the DESTINATION enviornment variable, or bypass this check by setting the USE_DESTINATION_HOST_HEADER bool environment variable');
 }
 
+const includeHeaders = false;
+
 const sessionManager = new SessionManager();
-const deps: AppDependencies = {sessionManager, defaultDestination};
+const deps: AppDependencies = {
+    sessionManager,
+    defaultDestination,
+    includeHeaders,
+};
 
 initTerminal(deps);
 const app = initApp(deps);
