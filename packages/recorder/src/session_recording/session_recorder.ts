@@ -28,15 +28,23 @@ export class RecordingSession {
     }
 
     logRecordedCalls = async (sessionName: string): Promise<string> => {
-        const startTime = this.startTime.toISOString().replaceAll(':', '-');
-        const endTime = new Date().toISOString().replaceAll(':', '-');
+        if (!this.recordedCalls.length) {
+            return 'No calls have been made during this session';
+        }
+
+        const startTime = this.startTime.toISOString().replaceAll(':', '-').substring(0, 19);
+        const endTime = new Date().toISOString().replaceAll(':', '-').substring(0, 19);
 
         let dataLogsFolder = process.env.DATA_LOG_OUT_DIR;
         if (!dataLogsFolder) {
             dataLogsFolder = './data_logs';
         }
 
-        let topFolderName = `${dataLogsFolder}/${startTime}__${sessionName}`;
+        let topFolderName = `${dataLogsFolder}/${startTime}`;
+        if (sessionName) {
+            topFolderName = `${dataLogsFolder}/${startTime}__${sessionName}`;
+        }
+
         try {
             await fs.mkdir(topFolderName, {recursive: true});
         } catch (e) {
@@ -46,6 +54,10 @@ export class RecordingSession {
 
         const withTopFolder = (path: string) => topFolderName + '/' + path;
 
+        const withHostFolder = (host: string, path: string) => withTopFolder(
+            host.replaceAll('https://', '').replaceAll('http://', '').replaceAll('/', '_')
+            + '/' + path);
+
         const calls: HttpRequestSummary[] = [];
 
         for (const call of this.recordedCalls) {
@@ -54,7 +66,7 @@ export class RecordingSession {
                 requestPath = requestPath.slice(1);
             }
 
-            const subpath = withTopFolder(`${requestPath.replaceAll('/', '_')}`);
+            const subpath = withHostFolder(call.host, `${requestPath.replaceAll('/', '_')}`);
             await fs.mkdir(subpath, {recursive: true});
 
             const filename = `${subpath}/${call.requestMethod}_${call.time.replaceAll(':', '-')}.json`;

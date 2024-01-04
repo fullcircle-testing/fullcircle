@@ -10,20 +10,53 @@ if (!defaultDestination && useDestinationHostHeader !== 'true') {
     console.log('Please provide a destination via the DESTINATION enviornment variable, or bypass this check by setting the USE_DESTINATION_HOST_HEADER bool environment variable');
 }
 
-const includeHeaders = false;
+import {Command} from 'commander';
+const program = new Command();
 
-const sessionManager = new SessionManager();
-const deps: AppDependencies = {
-    sessionManager,
-    defaultDestination,
-    includeHeaders,
-};
+const runServerForDestination = async (host: string, port: string, deps: AppDependencies) => {
+    const app = initApp({
+        ...deps,
+        defaultDestination: host,
+    });
 
-initTerminal(deps);
-const app = initApp(deps);
+    return new Promise<void>(r => {
+        app.listen(port, () => {
+            console.log(`http://localhost:${port}`);
+            setTimeout(() => {
+                r();
+            }, 50);
+        });
+    });
+}
 
-const port = process.env.PORT || 3000;
+program
+    .name('fc-record')
+    .description('CLI to record HTTP request sessions')
+    .version('0.0.1');
 
-app.listen(port, () => {
-    console.log(`http://localhost:${port}`);
-});
+// Usage: Destination host and local port pairs. A vertical bar is used to join the destination host and local port. The destinations are separated by spaces.
+program.command('record')
+    .description('Record requests')
+    .option('-d, --destinations [host|port...]', '')
+    .action(async (parsed: {destinations: string[]}, options) => {
+        const destinations = parsed.destinations;
+        console.log(destinations);
+
+        const includeHeaders = false;
+
+        const sessionManager = new SessionManager();
+        const deps: AppDependencies = {
+            sessionManager,
+            defaultDestination,
+            includeHeaders,
+        };
+
+        for (const dest of destinations) {
+            const [host, port] = dest.split('|');
+            await runServerForDestination(host, port, deps);
+        }
+
+        initTerminal(deps);
+    });
+
+program.parse();
