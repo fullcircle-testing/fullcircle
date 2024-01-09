@@ -14,7 +14,7 @@ const runServerForDestination = async (host: string, port: string, deps: AppDepe
 
     return new Promise<void>(r => {
         app.listen(port, () => {
-            console.log(`http://localhost:${port}`);
+            console.log(`http://localhost:${port} -> ${host}`);
             setTimeout(() => {
                 r();
             }, 50);
@@ -30,12 +30,10 @@ program
 // Usage: Destination host and local port pairs. A vertical bar is used to join the destination host and local port. The destinations are separated by spaces.
 program.command('record')
     .description('Record requests')
-    .option('-d, --destinations [host|port...]', '')
-    .action(async (parsed: {destinations: string[]}, options) => {
-        const destinations = parsed.destinations;
-        console.log(destinations);
-
-        const includeHeaders = false;
+    .option('-d, --destinations [host|port...]', 'Destination/port mappings to proxy and record requests')
+    .option('-h, --includeHeaders', 'Include HTTP headers in output', false)
+    .action(async ({destinations, includeHeaders}: {destinations: string[], includeHeaders: boolean}, options) => {
+        console.log(destinations, '\n');
 
         const sessionManager = new SessionManager();
         const deps: AppDependencies = {
@@ -50,6 +48,14 @@ program.command('record')
         }
 
         initTerminal(deps);
+
+        const shutdown = async () => {
+            await sessionManager.finishCurrentSession('');
+            process.exit(0);
+        }
+
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
     });
 
 program.parse();

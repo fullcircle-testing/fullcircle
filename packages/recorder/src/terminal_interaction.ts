@@ -18,5 +18,5 @@ export const initTerminal = (deps: AppDependencies) => {
         deps.sessionManager.startNewSession();
     });
 
-    console.log('Press Enter to save the current session.');
+    console.log('\nType your session name and press Enter to save your session.');
 }
