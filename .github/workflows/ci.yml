@@ -22,5 +22,9 @@ jobs:
       - name: Fetch npm dependencies
         run: npm i
 
+      - name: Install example app npm dependencies
+        run: npm i
+        working-directory: ./example_app/server
+
       - name: Run tests
         run: npm test

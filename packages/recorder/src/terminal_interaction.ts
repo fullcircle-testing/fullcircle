@@ -10,11 +10,13 @@ export const initTerminal = (deps: AppDependencies) => {
     deps.sessionManager.startNewSession();
 
     rl.on('line', async (input) => {
-        console.log('Saving current session');
-        const text = await deps.sessionManager.finishCurrentSession();
+        console.log('\n');
+
+        const text = await deps.sessionManager.finishCurrentSession(input);
         console.log(text);
+
         deps.sessionManager.startNewSession();
     });
 
-    console.log('Press Enter to save the current session.');
+    console.log('\nType your session name and press Enter to save your session.');
 }
