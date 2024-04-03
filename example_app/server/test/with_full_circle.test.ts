@@ -3,7 +3,7 @@
 import express from 'express';
 import request from 'supertest';
 
-import {FullCircleInstance, fullcircle} from '@fullcircle/harness/fullcircle';
+import {FullCircleInstance, fullcircle} from '../../../dist/harness';
 import {initApp} from '../src/server';
 
 import savedPostsTestData from './testdata/posts.json';

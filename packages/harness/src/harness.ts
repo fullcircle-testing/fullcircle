@@ -161,10 +161,14 @@ export class TestHarness {
 
     close = async () => {
         this.fc.unsubscribeToRequests(this.onRequest);
+    }
+
+    closeWithAssertions = async () => {
+        await this.close();
         await this.runAssertions();
     }
 
     [Symbol.asyncDispose] = async () => {
-        await this.close();
+        await this.closeWithAssertions();
     }
 }

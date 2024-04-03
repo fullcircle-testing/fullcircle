@@ -15,7 +15,6 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "paths": {
-      "@fullcircle/harness/*": ["../../packages/harness/src/*"]
     }
   }
 }

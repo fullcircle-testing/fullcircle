@@ -1,105 +1,85 @@
-(Symbol as any).asyncDispose ??= Symbol('Symbol.asyncDispose');
-(Symbol as any).dispose ??= Symbol('Symbol.dispose');
+import {Page, expect} from '@playwright/test';
 
-import {test as base, expect} from '@playwright/test';
-import {FullCircleInstance, fullcircle} from '../../../packages/harness/src/fullcircle';
+import {test} from '../utils/setup';
 
 import {Todo} from '../../server/src/types/model';
 
-type ExtendedFixtures = {
-    externalApi: FullCircleInstance;
+const gotoHome = async (page: Page) => {
+    await page.goto('http://localhost:9000');
+};
+
+const mockTodos = () => {
+
 }
 
-// export const t = base.extend<{}, ExtendedFixtures>({
-//     externalApi: [async ({}, use) => {
-//         const fc = await fullcircle({listenAddress: 8000, defaultDestination: 'jsonplaceholder.typicode.com'});
-//         await use(fc);
-//     }, {scope: 'worker'}],
-// });
-
-export const test = base.extend<{}, ExtendedFixtures>({
-    externalApi: [async ({}, use) => {
-        const fc = await fullcircle({listenAddress: 8000});
-        // const fc = await fullcircle({listenAddress: 8000, assertionAdapter});
-        await use(fc);
-        await fc.close();
-    }, {scope: 'worker'}],
+test.beforeEach(async ({page}) => {
+    await gotoHome(page);
 });
 
-test('shows button', async ({page}) => {
-    await page.goto('http://localhost:9000');
+test.describe('basic loading', () => {
+    test('shows button', async ({page}) => {
+        await expect(page.locator('button')).toBeVisible();
+    });
 
-    await expect(page.locator('button')).toBeVisible();
+    test('shows blank todos container', async ({page}) => {
+        await expect(page.locator('#todos-container')).toHaveText('');
+    });
 });
 
-test('shows blank todos container', async ({page}) => {
-    await page.goto('http://localhost:9000');
+test.describe('with external api', () => {
+    test('shows todos from mocked response', async ({page, fc}) => {
+        await expect(page.locator('#todos-container')).toHaveText('');
 
-    await expect(page.locator('#todos-container')).toHaveText('');
-});
+        {
+            // await using mockApi = fc.harness('');
+            const mockApi = fc.harness('');
 
-test('shows todos from mocked response', async ({page, externalApi}) => {
-    await page.goto('http://localhost:9000');
+            mockApi.get('/todos', async (req, res) => {
+                const todos: Todo[] = [{
+                    id: 1,
+                    userId: 1,
+                    title: 'my todo',
+                    completed: false,
+                }]
+                res.json(todos);
+            });
 
-    await expect(page.locator('#todos-container')).toHaveText('');
+            await page.locator('button').click();
 
-    {
-        // TODO: figure out why `await using` doesn't work here
-        // await using mockApi = externalApi.harness('');
-        const mockApi = externalApi.harness('');
+            await expect(page.locator('#todos-container')).toHaveText('my todo');
 
-        await using d = {async [Symbol.asyncDispose]() {
+            await mockApi.closeWithAssertions();
+        }
+    });
 
-        }}
+    test('shows todos from mocked response again', async ({page, fc}) => {
+        await page.goto('http://localhost:9000');
 
-        mockApi.get('/todos', async (req, res) => {
-            const todos: Todo[] = [{
-                id: 1,
-                userId: 1,
-                title: 'my todo',
-                completed: false,
-            }]
-            res.json(todos);
-        });
+        await expect(page.locator('#todos-container')).toHaveText('');
 
-        await page.locator('button').click();
+        {
+            // TODO: figure out why `await using` doesn't work here
+            // await using mockApi = externalApi.harness('');
+            const mockApi = fc.harness('');
 
-        await expect(page.locator('#todos-container')).toHaveText('my todo');
+            mockApi.get('/todos', async (req, res) => {
+                const todos: Todo[] = [{
+                    id: 1,
+                    userId: 1,
+                    title: 'my todo',
+                    completed: false,
+                }];
 
-        // this should normally be called with `using` cleanup
-        await mockApi.close();
-    }
-});
+                res.json(todos);
+            });
 
-test('shows todos from mocked response2', async ({page, externalApi}) => {
-    await page.goto('http://localhost:9000');
+            await page.locator('button').click();
 
-    await expect(page.locator('#todos-container')).toHaveText('');
+            await expect(page.locator('#todos-container')).toHaveText('my todo');
 
-    {
-        // TODO: figure out why `await using` doesn't work here
-        // await using mockApi = externalApi.harness('');
-        const mockApi = externalApi.harness('');
+            // this should normally be called with `using` cleanup
+            await mockApi.closeWithAssertions();
+        }
+    });
 
-        await using d = {async [Symbol.asyncDispose]() {
-
-        }}
-
-        mockApi.get('/todos', async (req, res) => {
-            const todos: Todo[] = [{
-                id: 1,
-                userId: 1,
-                title: 'my todo',
-                completed: false,
-            }]
-            res.json(todos);
-        });
-
-        await page.locator('button').click();
-
-        await expect(page.locator('#todos-container')).toHaveText('my todo');
-
-        // this should normally be called with `using` cleanup
-        await mockApi.close();
-    }
 });

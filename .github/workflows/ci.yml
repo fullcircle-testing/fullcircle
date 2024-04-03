@@ -28,3 +28,25 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Run example app tests
+        run: npm test
+        working-directory: ./example_app/server
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Fetch npm dependencies
+        run: npm i
+        env:
+          NODE_ENV: production
+
+      - name: Run build
+        run: npm run build
