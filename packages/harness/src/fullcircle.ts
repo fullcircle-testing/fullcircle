@@ -12,6 +12,7 @@ export type SubscriptionFunc = ReplaceReturnType<express.Handler, Promise<boolea
 export type FullCircleOptions = {
     listenAddress: string | number | null;
     defaultDestination?: string;
+    verbose?: boolean;
 };
 
 export type HarnessRouter = express.Router & TestHarness;
@@ -40,7 +41,7 @@ export class FullCircleInstance {
 
         return new Promise<void>(resolve => {
             this.server = this.expressApp.listen(listenAddress, async () => {
-                console.log(`fullcircle test harness listening on ${listenAddress}`);
+                this.log(`fullcircle test harness listening on ${listenAddress}`);
                 await new Promise(r => setTimeout(r, 10));
                 resolve();
             });
@@ -55,7 +56,7 @@ export class FullCircleInstance {
 
     harness = (originalHost: string) => {
         const router = express.Router();
-        const th = new TestHarness(this, originalHost, router, async () => {
+        const th = new TestHarness(this, originalHost, router, Boolean(this.options.verbose), async () => {
             const r = this.subscriptionRouter;
 
             // });
@@ -116,6 +117,14 @@ export class FullCircleInstance {
     }
 
     [Symbol.asyncDispose] = this.close;
+
+    private log = (...toLog: any[]) => {
+        if (!this.options.verbose) {
+            return;
+        }
+
+        console.log(...toLog);
+    };
 }
 
 export const fullcircle = async (options: FullCircleOptions) => {

@@ -17,14 +17,17 @@ export class TestHarness {
     post: express.Router['post'];
     delete: express.Router['delete'];
 
+    private verbose: boolean;
+
     private fc: FullCircleInstance;
     private originalHost: string;
 
-    constructor(fc: FullCircleInstance, originalHost: string, router: express.Router, removeRouter: () => void) {
+    constructor(fc: FullCircleInstance, originalHost: string, router: express.Router, verbose: boolean, removeRouter: () => void) {
         this.fc = fc;
         this.originalHost = originalHost;
         this.originalRouter = router;
         this.proxyRouter = this.newProxyRouter(this.originalRouter);
+        this.verbose = verbose;
 
         this.get = this.proxyRouter.get.bind(this.proxyRouter);
         this.put = this.proxyRouter.put.bind(this.proxyRouter);
@@ -35,7 +38,7 @@ export class TestHarness {
     }
 
     private handleCalled = (path: string, method: string) => {
-        console.log('Called', path, method);
+        this.log('Called', path, method);
 
         const mock = this.registeredMocks.find(m => m.path === path && !m.called);
         if (mock) {
@@ -149,7 +152,7 @@ export class TestHarness {
             }
         }
 
-        // console.log(messages);
+        // this.log(messages);
         if (errors.length) {
             throw new Error(`harness assertions failed:\n${errors.join('\n')}`);
         }
@@ -170,5 +173,13 @@ export class TestHarness {
 
     [Symbol.asyncDispose] = async () => {
         await this.closeWithAssertions();
+    }
+
+    private log = (...toLog: any[]) => {
+        if (!this.verbose) {
+            return;
+        }
+
+        this.log(...toLog);
     }
 }
