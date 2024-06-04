@@ -16,9 +16,21 @@ export class ExternalClient {
         return this.doGet(path);
     };
 
-    getTodos = (): Promise<Todo[]> => {
+    getTodos = async (): Promise<Todo[]> => {
         const path = '/todos';
-        return this.doGet(path);
+        try {
+            const todos = await this.doGet(path);
+            if (!Array.isArray(todos)) {
+                console.error('not array');
+                return [];
+            }
+
+            return todos;
+        } catch (e) {
+            console.error(e);
+            return [];
+        }
+
     };
 
     private doGet = (path: string) => {

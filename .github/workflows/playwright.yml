@@ -12,6 +12,8 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.40.1-jammy
     steps:
 
     - uses: actions/checkout@v3
@@ -20,20 +22,19 @@ jobs:
       with:
         node-version-file: .nvmrc
 
-    - name: Install fc dependencies
+    - name: Install FC dependencies
       run: npm i
+
+    - name: Build FC
+      run: npm run build
+
+    - name: Install example app npm dependencies
+      run: npm i
+      working-directory: ./example_app/server
 
     - name: Install playwright dependencies
       run: npm i
       working-directory: ./example_app/tests-e2e
-
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
-      working-directory: ./example_app/tests-e2e
-
-    - name: Run Server
-      run: PORT=9000 FULLCIRCLE_HOST=http://localhost:8000 npm run start-with-fc &
-      working-directory: ./example_app/server
 
     - name: Run Playwright tests
       working-directory: ./example_app/tests-e2e
@@ -43,5 +44,5 @@ jobs:
       if: always()
       with:
         name: playwright-report
-        path: playwright-report/
+        path: ./example_app/tests-e2e/playwright-report
         retention-days: 30

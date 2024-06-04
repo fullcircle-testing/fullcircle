@@ -12,10 +12,14 @@ export type SubscriptionFunc = ReplaceReturnType<express.Handler, Promise<boolea
 export type FullCircleOptions = {
     listenAddress: string | number | null;
     defaultDestination?: string;
+    verbose?: boolean;
 };
+
+export type HarnessRouter = express.Router & TestHarness;
 
 export class FullCircleInstance {
     private subscriptions: SubscriptionFunc[] = [];
+    private subscriptionRouter!: express.Router;
 
     public expressApp: express.Express;
     private server?: Server;
@@ -25,7 +29,8 @@ export class FullCircleInstance {
     }
 
     initialize = async () => {
-        this.expressApp.use(this.initializeSubscriptionRouter());
+        this.subscriptionRouter = this.initializeSubscriptionRouter();
+        this.expressApp.use(this.subscriptionRouter);
         this.expressApp.use(this.initializeNotFoundRouter());
 
         const {listenAddress} = this.options;
@@ -36,7 +41,7 @@ export class FullCircleInstance {
 
         return new Promise<void>(resolve => {
             this.server = this.expressApp.listen(listenAddress, async () => {
-                console.log(`fullcircle test harness listening on ${listenAddress}`);
+                this.log(`fullcircle test harness listening on ${listenAddress}`);
                 await new Promise(r => setTimeout(r, 10));
                 resolve();
             });
@@ -45,18 +50,28 @@ export class FullCircleInstance {
 
     private initializeSubscriptionRouter = (): express.Router => {
         const router = express.Router();
-        router.use(async (req, res, next) => {
-            for (const sub of this.subscriptions) {
-                if (await sub(req, res, next)) {
-                    return;
-                }
-            }
-
-            next();
-        });
 
         return router;
-    };
+    }
+
+    harness = (originalHost: string) => {
+        const router = express.Router();
+        const th = new TestHarness(this, originalHost, router, Boolean(this.options.verbose), async () => {
+            const r = this.subscriptionRouter;
+
+            // });
+
+            // TODO: clean up the adhoc router
+
+            // const index = r.stack.findIndex(h => Boolean(h.path));
+            // r.stack = [...r.stack.slice(0, index), ...r.stack.slice(index + 1)];
+            // console.log(r.stack);
+        });
+
+        this.subscriptionRouter.use(th.getProxyRouter());
+
+        return th;
+    }
 
     private initializeNotFoundRouter = (): express.Router => {
         const router = express.Router();
@@ -83,8 +98,6 @@ export class FullCircleInstance {
         this.subscriptions = [...this.subscriptions.slice(0, index), ...this.subscriptions.slice(index + 1)];
     };
 
-    harness = (originalHost: string) => new TestHarness(this, originalHost);
-
     close = async () => {
         return new Promise<void>((resolve, reject) => {
             if (!this.server) {
@@ -104,6 +117,14 @@ export class FullCircleInstance {
     }
 
     [Symbol.asyncDispose] = this.close;
+
+    private log = (...toLog: any[]) => {
+        if (!this.options.verbose) {
+            return;
+        }
+
+        console.log(...toLog);
+    };
 }
 
 export const fullcircle = async (options: FullCircleOptions) => {

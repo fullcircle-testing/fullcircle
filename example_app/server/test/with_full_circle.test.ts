@@ -3,7 +3,7 @@
 import express from 'express';
 import request from 'supertest';
 
-import {FullCircleInstance, fullcircle} from '@fullcircle/harness/fullcircle';
+import {FullCircleInstance, fullcircle} from '../../../dist/harness';
 import {initApp} from '../src/server';
 
 import savedPostsTestData from './testdata/posts.json';
@@ -28,7 +28,7 @@ describe('Example app', () => {
         try {
             await using th = fc.harness('jsonplaceholder.typicode.com');
 
-            th.mock('/posts', (req, res) => {
+            th.get('/posts', (req, res) => {
                 res.json({data: 'My mocked data'});
             });
 
@@ -47,11 +47,11 @@ describe('Example app', () => {
         {
             await using th = fc.harness('jsonplaceholder.typicode.com');
 
-            th.mock('/posts', (req, res) => {
+            th.get('/posts', (req, res) => {
                 res.json({data: 'My first mocked data'});
             });
 
-            th.mock('/posts', (req, res) => {
+            th.get('/posts', (req, res) => {
                 res.json({data: 'My second mocked data'});
             });
 
@@ -70,11 +70,11 @@ describe('Example app', () => {
         {
             await using th = fc.harness('jsonplaceholder.typicode.com');
 
-            th.mock('/posts', (req, res) => {
+            th.get('/posts', (req, res) => {
                 res.json({data: 'My third mocked data'});
             });
 
-            th.mock('/posts', (req, res) => {
+            th.get('/posts', (req, res) => {
                 res.json({data: 'My fourth mocked data'});
             });
 
@@ -96,7 +96,7 @@ describe('Example app', () => {
 
         const mockResponse = savedPostsTestData;
 
-        th.mock('/posts', (req, res) => {
+        th.get('/posts', (req, res) => {
             res.json(mockResponse);
         });
 
