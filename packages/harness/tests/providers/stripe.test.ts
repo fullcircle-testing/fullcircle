@@ -159,4 +159,25 @@ describe('Stripe provider harness', () => {
         });
     });
 
+    it('uses the requested Checkout Session id as the default retrieve fixture id', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await using th = fc.harness('api.stripe.com');
+        stripeProvider(th).checkout.sessions.retrieve({
+            id: 'cs_test_custom_session',
+        });
+
+        const sessionResponse = await request(fc.expressApp)
+            .get('/v1/checkout/sessions/cs_test_custom_session')
+            .expect(200);
+
+        expect(sessionResponse.body).toMatchObject({
+            id: 'cs_test_custom_session',
+            object: 'checkout.session',
+        });
+    });
+
 });

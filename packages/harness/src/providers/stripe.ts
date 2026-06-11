@@ -73,7 +73,7 @@ export const stripeProvider = (harness: TestHarness): StripeProviderHarness => (
                         return;
                     }
 
-                    res.json(buildCheckoutSessionFixture({}, expectation.reply));
+                    res.json(buildCheckoutSessionFixture({}, {id: expectation.id, ...expectation.reply}));
                 });
             },
             lineItems: (expectation) => {
