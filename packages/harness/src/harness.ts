@@ -22,6 +22,7 @@ export class TestHarness {
 
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
         const path = req.originalUrl;
+        const pathWithoutQuery = req.path;
 
         let destinationHost = this.fc.options.defaultDestination;
 
@@ -43,7 +44,7 @@ export class TestHarness {
         }
 
         // gets first registered mock that hasn't been called
-        const mock = this.registeredMocks.find(m => m.path === path && !m.called);
+        const mock = this.registeredMocks.find(m => (m.path === path || m.path === pathWithoutQuery) && !m.called);
         if (mock) {
             mock.called = true;
 
@@ -51,7 +52,7 @@ export class TestHarness {
             return true;
         }
 
-        const passthrough = this.registeredMocks.find(m => m.path === path && !m.called);
+        const passthrough = this.registeredPassthroughs.find(m => (m.path === path || m.path === pathWithoutQuery) && !m.called);
         if (passthrough) {
             passthrough.called = true;
 

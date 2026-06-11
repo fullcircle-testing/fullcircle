@@ -25,6 +25,8 @@ export class FullCircleInstance {
     }
 
     initialize = async () => {
+        this.expressApp.use(express.urlencoded({extended: false}));
+        this.expressApp.use(express.json());
         this.expressApp.use(this.initializeSubscriptionRouter());
         this.expressApp.use(this.initializeNotFoundRouter());
 

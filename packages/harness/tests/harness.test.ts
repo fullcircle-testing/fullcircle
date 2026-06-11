@@ -187,6 +187,30 @@ describe('Harness tests', () => {
 
         expect(blockedFinished).toBe(true);
     });
+
+    it('harness.passthrough - fake fetch - should route registered passthrough path', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+        });
+
+        const app = fc.expressApp;
+
+        {
+            await using th = fc.harness('api.github.com');
+
+            th.passthrough('/api/repos', (req, res) => {
+                res.json({data: 'My passthrough data'});
+            });
+
+            const response = await request(app)
+                .get('/api/repos')
+                .set('original_host', 'api.github.com')
+                .expect(200);
+
+            expect(response.body).toEqual({data: 'My passthrough data'});
+        }
+    });
+
 });
 
 const logError = (err: any) => {
