@@ -8,7 +8,7 @@
     "recorder": "DATA_LOG_OUT_DIR=\"$PWD/data_logs\" npm start --prefix packages/recorder",
     "build": "tsup --entry.harness packages/harness/src/index.ts --entry.recorder packages/recorder/src/index.ts --format esm,cjs --dts",
     "prepare": "npm run build",
-    "test": "jest && npm test --prefix example_app/server"
+    "test": "jest --runInBand && npm test --prefix example_app/server"
   },
   "bin": {
     "fc-record": "./dist/recorder.js"

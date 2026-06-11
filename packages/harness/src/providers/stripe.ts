@@ -1,3 +1,5 @@
+import crypto from 'node:crypto';
+
 import type express from 'express';
 
 import type {TestHarness} from '../harness';
@@ -48,6 +50,58 @@ export type StripeCheckoutSessionLineItemsExpectation = {
     };
 };
 
+export type StripeWebhookType =
+    | 'checkout.session.completed'
+    | 'checkout.session.async_payment_succeeded'
+    | 'checkout.session.async_payment_failed'
+    | 'checkout.session.expired'
+    | 'customer.subscription.created'
+    | 'customer.subscription.updated'
+    | 'customer.subscription.deleted'
+    | 'invoice.paid'
+    | 'invoice.payment_failed';
+
+export type StripeWebhookFixture<TType extends StripeWebhookType = StripeWebhookType> = Partial<{
+    id: string;
+    object: 'event';
+    api_version: string;
+    created: number;
+    livemode: boolean;
+    type: TType;
+    data: {
+        object: Record<string, unknown>;
+    };
+}> & {
+    data: {
+        object: Record<string, unknown>;
+    };
+};
+
+export type StripeWebhookSendOptions = {
+    to?: string;
+    signingSecret?: string;
+    timestamp?: number;
+    signatureMode?: 'valid' | 'invalid' | 'missing';
+};
+
+export type StripeWebhookSequenceItem = {
+    type: StripeWebhookType;
+    event: StripeWebhookFixture;
+    options?: StripeWebhookSendOptions;
+};
+
+export type WebhookDeliveryResult = {
+    ok: boolean;
+    status: number;
+    body: string;
+};
+
+export type StripeProviderOptions = {
+    webhookEndpoint?: string;
+    webhookSigningSecret?: string;
+    apiVersion?: string;
+};
+
 export type StripeProviderHarness = {
     checkout: {
         sessions: {
@@ -56,11 +110,22 @@ export type StripeProviderHarness = {
             lineItems: (expectation: StripeCheckoutSessionLineItemsExpectation) => void;
         };
     };
+    webhooks: {
+        send: <TType extends StripeWebhookType>(
+            type: TType,
+            event: StripeWebhookFixture<TType>,
+            options?: StripeWebhookSendOptions,
+        ) => Promise<WebhookDeliveryResult>;
+        sendSequence: (
+            events: StripeWebhookSequenceItem[],
+            options?: StripeWebhookSendOptions,
+        ) => Promise<WebhookDeliveryResult[]>;
+    };
 };
 
 const CHECKOUT_SESSIONS_PATH = '/v1/checkout/sessions';
 
-export const stripeProvider = (harness: TestHarness): StripeProviderHarness => ({
+export const stripeProvider = (harness: TestHarness, options: StripeProviderOptions = {}): StripeProviderHarness => ({
     checkout: {
         sessions: {
             create: (expectation) => {
@@ -91,6 +156,21 @@ export const stripeProvider = (harness: TestHarness): StripeProviderHarness => (
                     });
                 });
             },
+        },
+    },
+    webhooks: {
+        send: (type, event, sendOptions) => sendStripeWebhook(type, event, options, sendOptions),
+        sendSequence: async (events, sendOptions) => {
+            const results: WebhookDeliveryResult[] = [];
+            for (const item of events) {
+                results.push(await sendStripeWebhook(
+                    item.type,
+                    item.event,
+                    options,
+                    {...sendOptions, ...item.options},
+                ));
+            }
+            return results;
         },
     },
 });
@@ -234,4 +314,75 @@ const collectMetadata = (body: StripeFormBody, prefix: string): Record<string, s
     }
 
     return metadata;
+};
+
+
+const sendStripeWebhook = async <TType extends StripeWebhookType>(
+    type: TType,
+    event: StripeWebhookFixture<TType>,
+    providerOptions: StripeProviderOptions,
+    sendOptions: StripeWebhookSendOptions = {},
+): Promise<WebhookDeliveryResult> => {
+    const endpoint = sendOptions.to || providerOptions.webhookEndpoint;
+    if (!endpoint) {
+        throw new Error('Stripe webhook endpoint is required. Pass webhookEndpoint to stripeProvider or to webhooks.send().');
+    }
+
+    const signingSecret = sendOptions.signingSecret || providerOptions.webhookSigningSecret || 'whsec_fullcircle_test_secret';
+    const timestamp = sendOptions.timestamp || Math.floor(Date.now() / 1000);
+    const payload = JSON.stringify(buildStripeWebhookEvent(type, event, providerOptions));
+    const headers: Record<string, string> = {
+        'content-type': 'application/json',
+    };
+
+    const signatureMode = sendOptions.signatureMode || 'valid';
+    if (signatureMode !== 'missing') {
+        headers['stripe-signature'] = makeStripeSignatureHeader(
+            payload,
+            signingSecret,
+            timestamp,
+            signatureMode,
+        );
+    }
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: payload,
+    });
+
+    return {
+        ok: response.ok,
+        status: response.status,
+        body: await response.text(),
+    };
+};
+
+const buildStripeWebhookEvent = <TType extends StripeWebhookType>(
+    type: TType,
+    event: StripeWebhookFixture<TType>,
+    providerOptions: StripeProviderOptions,
+) => ({
+    id: event.id || `evt_fullcircle_${type.replaceAll('.', '_')}`,
+    object: 'event' as const,
+    api_version: event.api_version || providerOptions.apiVersion || '2025-xx-xx.basil',
+    created: event.created || Math.floor(Date.now() / 1000),
+    livemode: event.livemode ?? false,
+    type,
+    data: event.data,
+});
+
+const makeStripeSignatureHeader = (
+    payload: string,
+    signingSecret: string,
+    timestamp: number,
+    signatureMode: 'valid' | 'invalid',
+): string => {
+    const secret = signatureMode === 'valid' ? signingSecret : `${signingSecret}_invalid`;
+    const signature = crypto
+        .createHmac('sha256', secret)
+        .update(`${timestamp}.${payload}`)
+        .digest('hex');
+
+    return `t=${timestamp},v1=${signature}`;
 };
