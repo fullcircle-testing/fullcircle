@@ -6,6 +6,33 @@ import fetch from 'node-fetch';
 import {fullcircle} from '../src/fullcircle';
 
 describe('Harness tests', () => {
+
+    it('fullcircle - dynamic listenAddress 0 exposes the bound port and url', async () => {
+        await using fc = await fullcircle({
+            listenAddress: 0,
+            defaultDestination: 'api.github.com',
+        });
+
+        expect(fc.port).toEqual(expect.any(Number));
+        expect(fc.port).toBeGreaterThan(0);
+        expect(fc.url).toEqual(`http://127.0.0.1:${fc.port}`);
+
+        await using th = fc.harness('api.github.com');
+        th.mock('/api/repos', (req, res) => {
+            res.json({data: 'My dynamically bound mocked data'});
+        });
+
+        const fetchRes = await fetch(`${fc.url}/api/repos`);
+        expect(fetchRes.status).toEqual(200);
+        await expect(fetchRes.json()).resolves.toEqual({data: 'My dynamically bound mocked data'});
+    });
+
+    it('fullcircle - rejects initialization when the listen port is already in use', async () => {
+        await using fc = await fullcircle({listenAddress: 0});
+
+        await expect(fullcircle({listenAddress: fc.port})).rejects.toThrow(/listen EADDRINUSE/);
+    });
+
     it('harness.mock - fake fetch - should succeed mocked path called', async () => {
         await using fc = await fullcircle({
             listenAddress: null,
@@ -77,7 +104,7 @@ describe('Harness tests', () => {
 
     it('harness.mock - real local fetch - should succeed mocked path called', async () => {
         await using fc = await fullcircle({
-            listenAddress: 7887,
+            listenAddress: 0,
         });
 
         let blockedFinished = false;
@@ -91,7 +118,7 @@ describe('Harness tests', () => {
             const reqPath = '/api/repos';
 
             try {
-                const fetchRes = await fetch(`http://localhost:7887${reqPath}`, {
+                const fetchRes = await fetch(`${fc.url}${reqPath}`, {
                     headers: {
                         'original_host': 'api.github.com',
                     },
@@ -113,7 +140,7 @@ describe('Harness tests', () => {
 
     it('harness.mock - real local fetch - should error when mocked path not called', async () => {
         await using fc = await fullcircle({
-            listenAddress: 7887,
+            listenAddress: 0,
         });
 
         let blockedFinished = false;
@@ -125,7 +152,7 @@ describe('Harness tests', () => {
 
             const reqPath = '/api/other';
             try {
-                const fetchRes = await fetch(`http://localhost:7887${reqPath}`, {
+                const fetchRes = await fetch(`${fc.url}${reqPath}`, {
                     headers: {
                         'original_host': 'api.github.com',
                     },
@@ -157,7 +184,7 @@ describe('Harness tests', () => {
 
     it('harness.mock - real local fetch - using defaultDestination', async () => {
         await using fc = await fullcircle({
-            listenAddress: 7887,
+            listenAddress: 0,
             defaultDestination: 'api.github.com',
         });
 
@@ -172,7 +199,7 @@ describe('Harness tests', () => {
             const reqPath = '/api/repos';
 
             try {
-                const fetchRes = await fetch(`http://localhost:7887${reqPath}`);
+                const fetchRes = await fetch(`${fc.url}${reqPath}`);
                 expect(fetchRes.status).toEqual(200);
 
                 const responseBody = await fetchRes.json();

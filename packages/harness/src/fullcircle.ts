@@ -16,12 +16,30 @@ export type FullCircleOptions = {
 
 export class FullCircleInstance {
     private subscriptions: SubscriptionFunc[] = [];
+    private boundPort?: number;
+    private boundUrl?: string;
 
     public expressApp: express.Express;
     private server?: Server;
 
     constructor(public options: FullCircleOptions) {
         this.expressApp = express();
+    }
+
+    get port(): number {
+        if (this.boundPort === undefined) {
+            throw new Error('FullCircle is not listening on a TCP port');
+        }
+
+        return this.boundPort;
+    }
+
+    get url(): string {
+        if (!this.boundUrl) {
+            throw new Error('FullCircle is not listening on a TCP URL');
+        }
+
+        return this.boundUrl;
     }
 
     initialize = async () => {
@@ -32,17 +50,40 @@ export class FullCircleInstance {
 
         const {listenAddress} = this.options;
 
-        if (!listenAddress) {
+        if (listenAddress === null) {
             return;
         }
 
-        return new Promise<void>(resolve => {
-            this.server = this.expressApp.listen(listenAddress, async () => {
-                console.log(`fullcircle test harness listening on ${listenAddress}`);
+        const normalizedListenAddress = normalizeListenAddress(listenAddress);
+
+        return new Promise<void>((resolve, reject) => {
+            const onError = (error: Error) => {
+                this.server?.off('listening', onListening);
+                reject(error);
+            };
+
+            const onListening = async () => {
+                this.server?.off('error', onError);
+                this.captureBoundAddress();
+                console.log(`fullcircle test harness listening on ${this.boundUrl || normalizedListenAddress}`);
                 await new Promise(r => setTimeout(r, 10));
                 resolve();
-            });
+            };
+
+            this.server = this.expressApp.listen(normalizedListenAddress);
+            this.server.once('error', onError);
+            this.server.once('listening', onListening);
         });
+    }
+
+    private captureBoundAddress = () => {
+        const address = this.server?.address();
+        if (!address || typeof address === 'string') {
+            return;
+        }
+
+        this.boundPort = address.port;
+        this.boundUrl = `http://127.0.0.1:${address.port}`;
     }
 
     private initializeSubscriptionRouter = (): express.Router => {
@@ -100,6 +141,9 @@ export class FullCircleInstance {
                     return;
                 }
 
+                this.server = undefined;
+                this.boundPort = undefined;
+                this.boundUrl = undefined;
                 resolve();
             });
         });
@@ -107,6 +151,14 @@ export class FullCircleInstance {
 
     [Symbol.asyncDispose] = this.close;
 }
+
+const normalizeListenAddress = (listenAddress: string | number): string | number => {
+    if (typeof listenAddress === 'string' && /^\d+$/.test(listenAddress)) {
+        return Number(listenAddress);
+    }
+
+    return listenAddress;
+};
 
 export const fullcircle = async (options: FullCircleOptions) => {
     const fc = new FullCircleInstance(options);

@@ -116,10 +116,9 @@ test('shows blank todos container', async ({page}) => {
 });
 
 test('shows todos from a FullCircle-controlled external service response', async ({page}) => {
-    const fullcirclePort = await getFreePort();
-    await using fc = await fullcircle({listenAddress: fullcirclePort, defaultDestination: 'jsonplaceholder.typicode.com'});
+    await using fc = await fullcircle({listenAddress: 0, defaultDestination: 'jsonplaceholder.typicode.com'});
     await using harness = fc.harness('jsonplaceholder.typicode.com');
-    const app = await startExampleApp(`http://127.0.0.1:${fullcirclePort}`);
+    const app = await startExampleApp(fc.url);
 
     try {
         await page.goto(app.url);

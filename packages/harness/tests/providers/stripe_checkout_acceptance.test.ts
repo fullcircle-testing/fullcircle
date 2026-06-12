@@ -2,8 +2,6 @@
 
 import crypto from 'node:crypto';
 import http from 'node:http';
-import net from 'node:net';
-
 import Database from 'better-sqlite3';
 import express from 'express';
 import fetch from 'node-fetch';
@@ -15,20 +13,6 @@ import {stripeProvider} from '../../src/providers/stripe';
 const STRIPE_WEBHOOK_SECRET = 'whsec_fullcircle_test_secret';
 
 type Snapshot = Record<string, Array<Record<string, unknown>>>;
-
-const getFreePort = async (): Promise<number> => new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.listen(0, () => {
-        const address = server.address();
-        if (!address || typeof address === 'string') {
-            reject(new Error('Expected TCP address'));
-            return;
-        }
-
-        const port = address.port;
-        server.close(() => resolve(port));
-    });
-});
 
 const readRawBody = (req: express.Request): Promise<Buffer> => new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -164,8 +148,7 @@ const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) =
 
 describe('Stripe Checkout subscription dogfood acceptance', () => {
     it('upgrades a user from Free to Pro through FullCircle-controlled Stripe API and signed webhook with SQLite diffs', async () => {
-        const fullcirclePort = await getFreePort();
-        await using fc = await fullcircle({listenAddress: fullcirclePort, defaultDestination: 'api.stripe.com'});
+        await using fc = await fullcircle({listenAddress: 0, defaultDestination: 'api.stripe.com'});
         await using th = fc.harness('api.stripe.com');
 
         const stripe = stripeProvider(th, {
@@ -190,7 +173,7 @@ describe('Stripe Checkout subscription dogfood acceptance', () => {
         const db = createDatabase();
         const app = initBillingApp({
             db,
-            stripeBaseUrl: `http://127.0.0.1:${fullcirclePort}`,
+            stripeBaseUrl: fc.url,
         });
         const appServer = await new Promise<http.Server>(resolve => {
             const listener = app.listen(0, () => resolve(listener));
