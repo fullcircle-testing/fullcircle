@@ -23,7 +23,7 @@ const getFreePort = async (): Promise<number> => new Promise((resolve, reject) =
     });
 });
 
-const waitForPort = async (port: number, timeoutMs = 10_000): Promise<void> => {
+const waitForPort = async (port: number, timeoutMs = 30_000): Promise<void> => {
     const startedAt = Date.now();
     while (Date.now() - startedAt < timeoutMs) {
         if (await canConnect(port)) {
@@ -60,7 +60,13 @@ const startExampleApp = async (externalUrl: string) => {
     child.stdout?.on('data', chunk => output.push(chunk.toString()));
     child.stderr?.on('data', chunk => output.push(chunk.toString()));
 
-    await waitForPort(port);
+    try {
+        await waitForPort(port);
+    } catch (error) {
+        await stopProcess(child, output).catch(() => undefined);
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`${message}\nExample app output:\n${output.join('')}`);
+    }
 
     return {
         url: `http://127.0.0.1:${port}`,
@@ -92,6 +98,7 @@ test('shows button', async ({page}) => {
         await page.goto(app.url);
 
         await expect(page.locator('button')).toBeVisible();
+        await expect(page.locator('script[src^="https://unpkg.com"]')).toHaveCount(0);
     } finally {
         await app.close();
     }
