@@ -8,6 +8,17 @@ type MaybeMatcher<T> = T | ((actual: T | undefined) => boolean);
 
 type StripeFormBody = Record<string, unknown>;
 
+export type StripeCheckoutLineItemExpectation = {
+    priceId?: MaybeMatcher<string>;
+    quantity?: MaybeMatcher<number>;
+};
+
+export type StripeCheckoutTrialExpectation = {
+    end?: MaybeMatcher<number>;
+    periodDays?: MaybeMatcher<number>;
+    missingPaymentMethod?: MaybeMatcher<string>;
+};
+
 export type StripeCheckoutSessionFixture = {
     id: string;
     object: 'checkout.session';
@@ -17,9 +28,13 @@ export type StripeCheckoutSessionFixture = {
     customer: string | null;
     subscription: string | null;
     client_reference_id: string | null;
+    client_secret: string | null;
     metadata: Record<string, string>;
     success_url: string | null;
     cancel_url: string | null;
+    return_url: string | null;
+    ui_mode: string | null;
+    allow_promotion_codes: boolean | null;
     url: string | null;
     livemode: boolean;
 };
@@ -29,11 +44,17 @@ export type StripeCheckoutSessionCreateExpectation = {
         mode?: MaybeMatcher<string>;
         successUrl?: MaybeMatcher<string>;
         cancelUrl?: MaybeMatcher<string>;
+        returnUrl?: MaybeMatcher<string>;
+        uiMode?: MaybeMatcher<string>;
+        customer?: MaybeMatcher<string>;
+        allowPromotionCodes?: MaybeMatcher<boolean>;
         priceId?: MaybeMatcher<string>;
         quantity?: MaybeMatcher<number>;
+        lineItems?: StripeCheckoutLineItemExpectation[];
         clientReferenceId?: MaybeMatcher<string>;
         metadata?: Record<string, MaybeMatcher<string>>;
         subscriptionMetadata?: Record<string, MaybeMatcher<string>>;
+        trial?: StripeCheckoutTrialExpectation;
     };
     reply?: Partial<StripeCheckoutSessionFixture>;
 };
@@ -211,9 +232,29 @@ const collectCheckoutSessionCreateMismatches = (
     assertMatch(mismatches, 'mode', getString(body, 'mode'), match.mode);
     assertMatch(mismatches, 'success_url', getString(body, 'success_url'), match.successUrl);
     assertMatch(mismatches, 'cancel_url', getString(body, 'cancel_url'), match.cancelUrl);
+    assertMatch(mismatches, 'return_url', getString(body, 'return_url'), match.returnUrl);
+    assertMatch(mismatches, 'ui_mode', getString(body, 'ui_mode'), match.uiMode);
+    assertMatch(mismatches, 'customer', getString(body, 'customer'), match.customer);
+    assertMatch(mismatches, 'allow_promotion_codes', getBoolean(body, 'allow_promotion_codes'), match.allowPromotionCodes);
     assertMatch(mismatches, 'line_items[0][price]', getString(body, 'line_items[0][price]'), match.priceId);
     assertMatch(mismatches, 'line_items[0][quantity]', getNumber(body, 'line_items[0][quantity]'), match.quantity);
     assertMatch(mismatches, 'client_reference_id', getString(body, 'client_reference_id'), match.clientReferenceId);
+
+    match.lineItems?.forEach((lineItem, index) => {
+        assertMatch(mismatches, `line_items[${index}][price]`, getString(body, `line_items[${index}][price]`), lineItem.priceId);
+        assertMatch(mismatches, `line_items[${index}][quantity]`, getNumber(body, `line_items[${index}][quantity]`), lineItem.quantity);
+    });
+
+    if (match.trial) {
+        assertMatch(mismatches, 'subscription_data[trial_end]', getNumber(body, 'subscription_data[trial_end]'), match.trial.end);
+        assertMatch(mismatches, 'subscription_data[trial_period_days]', getNumber(body, 'subscription_data[trial_period_days]'), match.trial.periodDays);
+        assertMatch(
+            mismatches,
+            'subscription_data[trial_settings][end_behavior][missing_payment_method]',
+            getString(body, 'subscription_data[trial_settings][end_behavior][missing_payment_method]'),
+            match.trial.missingPaymentMethod,
+        );
+    }
 
     for (const [key, matcher] of Object.entries(match.metadata || {})) {
         assertMatch(mismatches, `metadata[${key}]`, getString(body, `metadata[${key}]`), matcher);
@@ -226,7 +267,7 @@ const collectCheckoutSessionCreateMismatches = (
     return mismatches;
 };
 
-const assertMatch = <T extends string | number>(
+const assertMatch = <T extends string | number | boolean>(
     mismatches: string[],
     field: string,
     actual: T | undefined,
@@ -250,20 +291,27 @@ const buildCheckoutSessionFixture = (
     reply: Partial<StripeCheckoutSessionFixture> = {},
 ): StripeCheckoutSessionFixture => {
     const metadata = collectMetadata(body, 'metadata');
+    const id = reply.id || 'cs_test_fullcircle_123';
+    const uiMode = getString(body, 'ui_mode') || null;
+    const defaultClientSecret = uiMode === 'embedded' ? `${id}_secret_fullcircle` : null;
 
     return {
-        id: 'cs_test_fullcircle_123',
+        id,
         object: 'checkout.session',
         mode: 'subscription',
         status: 'open',
         payment_status: 'unpaid',
-        customer: 'cus_fullcircle_123',
+        customer: getString(body, 'customer') || 'cus_fullcircle_123',
         subscription: null,
         client_reference_id: getString(body, 'client_reference_id') || null,
+        client_secret: defaultClientSecret,
         metadata,
         success_url: getString(body, 'success_url') || null,
         cancel_url: getString(body, 'cancel_url') || null,
-        url: 'http://localhost:7331/stripe/checkout/cs_test_fullcircle_123',
+        return_url: getString(body, 'return_url') || null,
+        ui_mode: uiMode,
+        allow_promotion_codes: getBoolean(body, 'allow_promotion_codes') ?? null,
+        url: `http://localhost:7331/stripe/checkout/${id}`,
         livemode: false,
         ...reply,
     };
@@ -294,6 +342,23 @@ const getNumber = (body: StripeFormBody, key: string): number | undefined => {
 
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const getBoolean = (body: StripeFormBody, key: string): boolean | undefined => {
+    const value = getString(body, key);
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === 'true') {
+        return true;
+    }
+
+    if (value === 'false') {
+        return false;
+    }
+
+    return undefined;
 };
 
 const collectMetadata = (body: StripeFormBody, prefix: string): Record<string, string> => {

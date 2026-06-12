@@ -66,6 +66,84 @@ describe('Stripe provider harness', () => {
         });
     });
 
+
+    it('matches embedded subscription Checkout Sessions with multiple line items and trial settings', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await using th = fc.harness('api.stripe.com');
+        stripeProvider(th).checkout.sessions.create({
+            match: {
+                mode: 'subscription',
+                customer: 'cus_soundspace_user',
+                uiMode: 'embedded',
+                returnUrl: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+                allowPromotionCodes: true,
+                clientReferenceId: 'user_test_123',
+                lineItems: [
+                    {priceId: 'price_room_hours_monthly', quantity: 2},
+                    {priceId: 'price_storage_monthly', quantity: 1},
+                ],
+                metadata: {
+                    user_id: 'user_test_123',
+                    plan_id: 'plan_pro',
+                },
+                subscriptionMetadata: {
+                    user_id: 'user_test_123',
+                },
+                trial: {
+                    end: 1765000000,
+                    missingPaymentMethod: 'cancel',
+                },
+            },
+            reply: {
+                id: 'cs_test_embedded_123',
+                customer: 'cus_soundspace_user',
+                client_secret: 'cs_test_embedded_123_secret_fullcircle',
+            },
+        });
+
+        const response = await request(fc.expressApp)
+            .post('/v1/checkout/sessions')
+            .type('form')
+            .send({
+                mode: 'subscription',
+                customer: 'cus_soundspace_user',
+                ui_mode: 'embedded',
+                return_url: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+                allow_promotion_codes: 'true',
+                client_reference_id: 'user_test_123',
+                'line_items[0][price]': 'price_room_hours_monthly',
+                'line_items[0][quantity]': '2',
+                'line_items[1][price]': 'price_storage_monthly',
+                'line_items[1][quantity]': '1',
+                'metadata[user_id]': 'user_test_123',
+                'metadata[plan_id]': 'plan_pro',
+                'subscription_data[metadata][user_id]': 'user_test_123',
+                'subscription_data[trial_end]': '1765000000',
+                'subscription_data[trial_settings][end_behavior][missing_payment_method]': 'cancel',
+            })
+            .expect(200);
+
+        expect(response.body).toMatchObject({
+            id: 'cs_test_embedded_123',
+            object: 'checkout.session',
+            mode: 'subscription',
+            customer: 'cus_soundspace_user',
+            client_secret: 'cs_test_embedded_123_secret_fullcircle',
+            ui_mode: 'embedded',
+            return_url: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+            allow_promotion_codes: true,
+            client_reference_id: 'user_test_123',
+            metadata: {
+                user_id: 'user_test_123',
+                plan_id: 'plan_pro',
+            },
+        });
+    });
+
     it('rejects Checkout Session create requests that do not match expected Stripe parameters', async () => {
         await using fc = await fullcircle({
             listenAddress: null,
