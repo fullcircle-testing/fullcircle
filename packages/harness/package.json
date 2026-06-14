@@ -6,7 +6,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "ts-node-dev src/index.ts",
-    "test": "jest && npm test --prefix example_app/server"
+    "test": "jest && npm test --prefix example_app/server",
+    "check-types": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",

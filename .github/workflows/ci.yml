@@ -2,7 +2,6 @@ name: ci
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -13,18 +12,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
+          cache: npm
 
       - name: Fetch npm dependencies
-        run: npm i
+        run: npm ci
 
       - name: Install example app npm dependencies
-        run: npm i
+        run: npm ci
         working-directory: ./example_app/server
+
+      - name: Install Playwright e2e npm dependencies
+        run: npm ci
+        working-directory: ./example_app/tests-e2e
+
+      - name: Run type checks
+        run: npm run check-types
+
+      - name: Build packages
+        run: npm run build
 
       - name: Run tests
         run: npm test

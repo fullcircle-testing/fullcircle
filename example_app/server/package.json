@@ -9,7 +9,7 @@
     "test-curl": "curl http://localhost:9000/api/todos/1",
     "fc-recorder": "PORT=8000 DESTINATION=jsonplaceholder.typicode.com DATA_LOG_OUT_DIR=\"$PWD/data_logs\" npm start --prefix ../../packages/recorder",
     "test": "jest",
-    "tsc": "tsc"
+    "tsc": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
