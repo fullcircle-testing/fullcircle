@@ -17,19 +17,43 @@ The recorder tool helps organize the requests and lays them out in a linear time
 
 To use the recorder tool, (for now) clone this repo and run `npm i`, then follow the instructions below.
 
-The command shown below is used to proxy/record requests to twitter.com by listening on local port 5005, and proxy/record requests to wikipedia.org on local port 5006. The requests for both services will be recorded in chronological order, and a new entry will be put into the `data_logs` folder from your current working directory.
+The recorder is config-file-first. Create `fullcircle.recorder.json` in the directory where you run the command:
 
+```json
+{
+  "includeHeaders": false,
+  "destinations": [
+    {
+      "host": "https://twitter.com",
+      "port": 5005
+    },
+    {
+      "host": "https://wikipedia.org",
+      "port": 5006
+    }
+  ]
+}
 ```
-npm run recorder record -- -- --destinations https://twitter.com\|5005 https://wikipedia.org\|5006
+
+Then start recording:
+
+```bash
+npm run recorder -- record
+```
+
+This proxies/records requests to twitter.com by listening on local port 5005, and proxies/records requests to wikipedia.org by listening on local port 5006. The requests for both services will be recorded in chronological order, and a new entry will be put into the `data_logs` folder from your current working directory.
+
+You can pass a different config path with `--config ./path/to/fullcircle.recorder.json`. For quick experiments, CLI destinations are still supported and override config destinations:
+
+```bash
+npm run recorder -- record --destinations 'https://twitter.com|5005' 'https://wikipedia.org|5006'
 ```
 
 You'll see an output like this in the terminal:
 
 ```
 > @fullcircle/recorder@1.0.0 start
-> ts-node src/index.ts record --destinations https://twitter.com|5005 https://wikipedia.org|5006
-
-[ 'https://twitter.com|5005', 'https://wikipedia.org|5006' ]
+> ts-node src/index.ts record
 
 http://localhost:5005 -> https://twitter.com
 http://localhost:5006 -> https://wikipedia.org

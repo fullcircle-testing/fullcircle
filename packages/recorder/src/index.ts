@@ -1,4 +1,9 @@
 import {initApp} from './express_app';
+import {
+    DEFAULT_RECORDER_CONFIG_PATH,
+    loadRecorderConfig,
+    resolveRecorderConfig,
+} from './recorder_config';
 import {SessionManager} from './session_recording/sessions_manager';
 import {initTerminal} from './terminal_interaction';
 import {AppDependencies} from './types';
@@ -27,24 +32,28 @@ program
     .description('CLI to record HTTP request sessions')
     .version('0.0.1');
 
-// Usage: Destination host and local port pairs. A vertical bar is used to join the destination host and local port. The destinations are separated by spaces.
 program.command('record')
     .description('Record requests')
-    .option('-d, --destinations [host|port...]', 'Destination/port mappings to proxy and record requests')
-    .option('-h, --includeHeaders', 'Include HTTP headers in output', false)
-    .action(async ({destinations, includeHeaders}: {destinations: string[], includeHeaders: boolean}, options) => {
-        console.log(destinations, '\n');
+    .option('-c, --config <path>', 'Recorder config file path', DEFAULT_RECORDER_CONFIG_PATH)
+    .option('-d, --destinations <host|port...>', 'Destination/port mappings to proxy and record requests; overrides config destinations')
+    .option('-H, --include-headers', 'Include HTTP headers in output; overrides config includeHeaders')
+    .action(async (options: {config: string; destinations?: string[]; includeHeaders?: boolean}, command) => {
+        const config = loadRecorderConfig(options.config);
+        const recorderConfig = resolveRecorderConfig({
+            config,
+            destinationArgs: options.destinations,
+            includeHeadersOverride: options.includeHeaders,
+        });
 
         const sessionManager = new SessionManager();
         const deps: AppDependencies = {
             sessionManager,
             defaultDestination: '',
-            includeHeaders,
+            includeHeaders: recorderConfig.includeHeaders,
         };
 
-        for (const dest of destinations) {
-            const [host, port] = dest.split('|');
-            await runServerForDestination(host, port, deps);
+        for (const destination of recorderConfig.destinations) {
+            await runServerForDestination(destination.host, destination.port, deps);
         }
 
         initTerminal(deps);
@@ -58,4 +67,7 @@ program.command('record')
         process.on('SIGINT', shutdown);
     });
 
-program.parse();
+program.parseAsync().catch((error: Error) => {
+    console.error(error.message);
+    process.exit(1);
+});
