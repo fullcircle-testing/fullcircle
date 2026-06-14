@@ -109,7 +109,28 @@ describe('Stripe provider webhooks', () => {
                 },
             },
         });
+        expect(receivedEvents[0]?.body).not.toHaveProperty('api_version');
         expect(receivedEvents[0]?.signature).toMatch(/^t=1760000000,v1=[a-f0-9]{64}$/);
+    });
+
+    it('includes webhook api_version only when explicitly configured', async () => {
+        await using fc = await fullcircle({listenAddress: null});
+        await using th = fc.harness('api.stripe.com');
+        const stripe = stripeProvider(th, {
+            webhookEndpoint: webhookUrl,
+            webhookSigningSecret: 'whsec_fullcircle_test_secret',
+            apiVersion: '2024-06-20',
+        });
+
+        await stripe.webhooks.send('invoice.paid', {
+            data: {object: {id: 'in_fullcircle_123'}},
+        });
+
+        expect(receivedEvents).toHaveLength(1);
+        expect(receivedEvents[0]?.body).toMatchObject({
+            type: 'invoice.paid',
+            api_version: '2024-06-20',
+        });
     });
 
     it('supports invalid and missing webhook signature modes for negative tests', async () => {

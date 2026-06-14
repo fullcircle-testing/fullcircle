@@ -1,7 +1,7 @@
 # FullCircle Stripe Checkout Subscriptions Spec
 
-Status: discussion/specification draft  
-Bead: `fullcircle-ktt — Research Stripe Checkout flow spec`  
+Status: discussion/specification draft
+Bead: `fullcircle-ktt — Research Stripe Checkout flow spec`
 Research date: 2026-06-11
 
 ## Goal
@@ -14,7 +14,7 @@ Implement first-class FullCircle support for Stripe Checkout subscription flows 
 4. Deliver Stripe-like webhook events with valid signatures.
 5. Record, sanitize, and replay the provider API calls, webhook events, browser actions, and SQLite DB effects.
 
-This spec is scoped to **Checkout Sessions in `subscription` mode**. One-time payments, embedded Checkout, customer portal, metered billing, and Connect are future expansions.
+This spec is scoped to **hosted Checkout Sessions in `subscription` mode**. One-time payments, Stripe Elements, embedded Checkout, customer portal, metered billing, and Connect are future expansions. FullCircle should not partially emulate those variants until each has its own provider contract and acceptance tests.
 
 ## Primary Stripe lifecycle to model
 
@@ -36,7 +36,7 @@ import Stripe from 'stripe';
 
 export function createStripeClient() {
   return new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-xx-xx.basil',
+    // Pin the same Stripe API version your app uses in production.
     // exact option depends on stripe-node version; provider adapter should document it
     // and/or provide a factory wrapper for apps that opt in.
     apiBase: process.env.FULLCIRCLE_STRIPE_API_BASE_URL,
@@ -189,7 +189,6 @@ Canonical event fixture:
 {
   "id": "evt_fullcircle_checkout_completed_123",
   "object": "event",
-  "api_version": "2025-xx-xx.basil",
   "created": 1760000000,
   "livemode": false,
   "type": "checkout.session.completed",
@@ -210,6 +209,8 @@ Canonical event fixture:
   }
 }
 ```
+
+`api_version` is intentionally omitted by default in FullCircle-generated webhook fixtures. Tests that need to assert API-version-specific behavior should set the version explicitly in the provider options or event fixture.
 
 FullCircle expected app behavior:
 

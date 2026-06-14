@@ -95,7 +95,9 @@ stripe.prices.create({ match: { product: 'prod_booking_1', recurringInterval: 'm
 stripe.prices.update({ id: 'price_monthly_1', match: { active: false }, reply: inactivePrice });
 stripe.prices.list({ match: { product: 'prod_pause' }, reply: [pausePrice] });
 
-stripe.checkout.sessions.createSubscription({
+// Future embedded-Checkout provider contract, not implemented in the hosted
+// Checkout v1 provider.
+stripe.checkout.sessions.createEmbeddedSubscription({
   match: {
     customer: 'cus_soundspace_user',
     uiMode: 'embedded',
@@ -127,7 +129,7 @@ Estimated fixtures:
 
 - `customer.none.json`: list-by-email returns `data: []`.
 - `customer.existing.json`: list-by-email returns existing `cus_*`.
-- `checkout.embedded.subscription.create.json`: `POST /v1/checkout/sessions` response with `client_secret`, `ui_mode=embedded`, `mode=subscription`, and Soundspace metadata.
+- `checkout.embedded.subscription.create.json`: future embedded Checkout fixture; `POST /v1/checkout/sessions` response with `client_secret`, `ui_mode=embedded`, `mode=subscription`, and Soundspace metadata.
 - `checkout.completed.retrieve.json`: `GET /v1/checkout/sessions/:id?expand[]=subscription` with expanded subscription.
 - `checkout.line_items.booking-products.json`: line items with expanded `price.product` IDs matching Prisma plan products.
 - `webhook.checkout.session.completed.json`: event that triggers `handleCheckoutSessionComplete()`.

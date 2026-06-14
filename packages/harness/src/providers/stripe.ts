@@ -28,12 +28,9 @@ export type StripeCheckoutSessionFixture = {
     customer: string | null;
     subscription: string | null;
     client_reference_id: string | null;
-    client_secret: string | null;
     metadata: Record<string, string>;
     success_url: string | null;
     cancel_url: string | null;
-    return_url: string | null;
-    ui_mode: string | null;
     allow_promotion_codes: boolean | null;
     url: string | null;
     livemode: boolean;
@@ -44,8 +41,6 @@ export type StripeCheckoutSessionCreateExpectation = {
         mode?: MaybeMatcher<string>;
         successUrl?: MaybeMatcher<string>;
         cancelUrl?: MaybeMatcher<string>;
-        returnUrl?: MaybeMatcher<string>;
-        uiMode?: MaybeMatcher<string>;
         customer?: MaybeMatcher<string>;
         allowPromotionCodes?: MaybeMatcher<boolean>;
         priceId?: MaybeMatcher<string>;
@@ -232,8 +227,6 @@ const collectCheckoutSessionCreateMismatches = (
     assertMatch(mismatches, 'mode', getString(body, 'mode'), match.mode);
     assertMatch(mismatches, 'success_url', getString(body, 'success_url'), match.successUrl);
     assertMatch(mismatches, 'cancel_url', getString(body, 'cancel_url'), match.cancelUrl);
-    assertMatch(mismatches, 'return_url', getString(body, 'return_url'), match.returnUrl);
-    assertMatch(mismatches, 'ui_mode', getString(body, 'ui_mode'), match.uiMode);
     assertMatch(mismatches, 'customer', getString(body, 'customer'), match.customer);
     assertMatch(mismatches, 'allow_promotion_codes', getBoolean(body, 'allow_promotion_codes'), match.allowPromotionCodes);
     assertMatch(mismatches, 'line_items[0][price]', getString(body, 'line_items[0][price]'), match.priceId);
@@ -292,8 +285,6 @@ const buildCheckoutSessionFixture = (
 ): StripeCheckoutSessionFixture => {
     const metadata = collectMetadata(body, 'metadata');
     const id = reply.id || 'cs_test_fullcircle_123';
-    const uiMode = getString(body, 'ui_mode') || null;
-    const defaultClientSecret = uiMode === 'embedded' ? `${id}_secret_fullcircle` : null;
 
     return {
         id,
@@ -304,12 +295,9 @@ const buildCheckoutSessionFixture = (
         customer: getString(body, 'customer') || 'cus_fullcircle_123',
         subscription: null,
         client_reference_id: getString(body, 'client_reference_id') || null,
-        client_secret: defaultClientSecret,
         metadata,
         success_url: getString(body, 'success_url') || null,
         cancel_url: getString(body, 'cancel_url') || null,
-        return_url: getString(body, 'return_url') || null,
-        ui_mode: uiMode,
         allow_promotion_codes: getBoolean(body, 'allow_promotion_codes') ?? null,
         url: `http://localhost:7331/stripe/checkout/${id}`,
         livemode: false,
@@ -427,15 +415,19 @@ const buildStripeWebhookEvent = <TType extends StripeWebhookType>(
     type: TType,
     event: StripeWebhookFixture<TType>,
     providerOptions: StripeProviderOptions,
-) => ({
-    id: event.id || `evt_fullcircle_${type.replaceAll('.', '_')}`,
-    object: 'event' as const,
-    api_version: event.api_version || providerOptions.apiVersion || '2025-xx-xx.basil',
-    created: event.created || Math.floor(Date.now() / 1000),
-    livemode: event.livemode ?? false,
-    type,
-    data: event.data,
-});
+) => {
+    const apiVersion = event.api_version || providerOptions.apiVersion;
+
+    return {
+        id: event.id || `evt_fullcircle_${type.replaceAll('.', '_')}`,
+        object: 'event' as const,
+        ...(apiVersion ? {api_version: apiVersion} : {}),
+        created: event.created || Math.floor(Date.now() / 1000),
+        livemode: event.livemode ?? false,
+        type,
+        data: event.data,
+    };
+};
 
 const makeStripeSignatureHeader = (
     payload: string,

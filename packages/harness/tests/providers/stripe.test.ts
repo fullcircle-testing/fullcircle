@@ -67,7 +67,7 @@ describe('Stripe provider harness', () => {
     });
 
 
-    it('matches embedded subscription Checkout Sessions with multiple line items and trial settings', async () => {
+    it('matches hosted subscription Checkout Sessions with multiple line items and trial settings', async () => {
         await using fc = await fullcircle({
             listenAddress: null,
             defaultDestination: 'api.stripe.com',
@@ -78,8 +78,8 @@ describe('Stripe provider harness', () => {
             match: {
                 mode: 'subscription',
                 customer: 'cus_soundspace_user',
-                uiMode: 'embedded',
-                returnUrl: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+                successUrl: 'http://localhost:3000/billing/success?session_id={CHECKOUT_SESSION_ID}',
+                cancelUrl: 'http://localhost:3000/billing/cancel',
                 allowPromotionCodes: true,
                 clientReferenceId: 'user_test_123',
                 lineItems: [
@@ -99,9 +99,8 @@ describe('Stripe provider harness', () => {
                 },
             },
             reply: {
-                id: 'cs_test_embedded_123',
+                id: 'cs_test_hosted_multi_123',
                 customer: 'cus_soundspace_user',
-                client_secret: 'cs_test_embedded_123_secret_fullcircle',
             },
         });
 
@@ -111,8 +110,8 @@ describe('Stripe provider harness', () => {
             .send({
                 mode: 'subscription',
                 customer: 'cus_soundspace_user',
-                ui_mode: 'embedded',
-                return_url: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+                success_url: 'http://localhost:3000/billing/success?session_id={CHECKOUT_SESSION_ID}',
+                cancel_url: 'http://localhost:3000/billing/cancel',
                 allow_promotion_codes: 'true',
                 client_reference_id: 'user_test_123',
                 'line_items[0][price]': 'price_room_hours_monthly',
@@ -128,13 +127,12 @@ describe('Stripe provider harness', () => {
             .expect(200);
 
         expect(response.body).toMatchObject({
-            id: 'cs_test_embedded_123',
+            id: 'cs_test_hosted_multi_123',
             object: 'checkout.session',
             mode: 'subscription',
             customer: 'cus_soundspace_user',
-            client_secret: 'cs_test_embedded_123_secret_fullcircle',
-            ui_mode: 'embedded',
-            return_url: 'http://localhost:3000/checkout/return?session_id={CHECKOUT_SESSION_ID}',
+            success_url: 'http://localhost:3000/billing/success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url: 'http://localhost:3000/billing/cancel',
             allow_promotion_codes: true,
             client_reference_id: 'user_test_123',
             metadata: {
