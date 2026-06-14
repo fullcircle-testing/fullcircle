@@ -1,5 +1,7 @@
 import express from 'express';
 import type {FullCircleInstance, SubscriptionFunc} from './fullcircle';
+import {fullCircleHandlerToExpress} from './express_adapter';
+import type {FullCircleHandler} from './primitives';
 
 type PathHandlerClump = {
     path: string;
@@ -48,7 +50,7 @@ export class TestHarness {
         if (mock) {
             mock.called = true;
 
-            mock.handler(req, res, next);
+            await Promise.resolve(mock.handler(req, res, next));
             return true;
         }
 
@@ -57,7 +59,7 @@ export class TestHarness {
             passthrough.called = true;
 
             // we are mocking but in reality this needs to be passed to the proxy middleware
-            passthrough.handler(req, res, next);
+            await Promise.resolve(passthrough.handler(req, res, next));
             return true;
         }
 
@@ -94,6 +96,10 @@ export class TestHarness {
 
     mock = (path: string, handler: express.Handler) => {
         this.registeredMocks.push({path, handler, called: false});
+    }
+
+    mockRoute = (path: string, handler: FullCircleHandler) => {
+        this.mock(path, fullCircleHandlerToExpress(handler, this.originalHost));
     }
 
     passthrough = (path: string, handler: express.Handler) => {

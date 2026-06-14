@@ -4,6 +4,7 @@ import request from 'supertest';
 import fetch from 'node-fetch';
 
 import {fullcircle} from '../src/fullcircle';
+import {response} from '../src/primitives';
 
 describe('Harness tests', () => {
 
@@ -213,6 +214,58 @@ describe('Harness tests', () => {
         }
 
         expect(blockedFinished).toBe(true);
+    });
+
+    it('harness.mockRoute - handles framework-neutral request and response primitives', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        const app = fc.expressApp;
+
+        {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute('/v1/checkout/sessions', async (req) => {
+                expect(req.method).toBe('POST');
+                expect(req.path).toBe('/v1/checkout/sessions');
+                expect(req.query.get('expand[]')).toBe('line_items');
+                expect(req.headers.get('authorization')).toBe('Bearer sk_test_fullcircle');
+                expect(req.destination).toBe('api.stripe.com');
+                expect(req.body).toEqual({
+                    kind: 'form',
+                    value: {
+                        mode: 'subscription',
+                        'line_items[0][price]': 'price_pro_monthly',
+                    },
+                });
+
+                return response.json({
+                    id: 'cs_test_fullcircle_123',
+                    object: 'checkout.session',
+                }, {
+                    status: 201,
+                    headers: {'x-fullcircle': 'yes'},
+                });
+            });
+
+            const responseBody = await request(app)
+                .post('/v1/checkout/sessions?expand[]=line_items')
+                .set('authorization', 'Bearer sk_test_fullcircle')
+                .type('form')
+                .send({
+                    mode: 'subscription',
+                    'line_items[0][price]': 'price_pro_monthly',
+                })
+                .expect(201)
+                .expect('x-fullcircle', 'yes');
+
+            expect(responseBody.body).toEqual({
+                id: 'cs_test_fullcircle_123',
+                object: 'checkout.session',
+            });
+        }
     });
 
     it('harness.passthrough - fake fetch - should route registered passthrough path', async () => {
