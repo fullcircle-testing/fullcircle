@@ -45,6 +45,8 @@ describe('Test proxy', () => {
         expect(lines?.length).toBeGreaterThan(2);
         expect(lines![0]!).toEqual('Finished session \"first session\"');
         expect(lines![1]!).toEqual('Recorded 1 calls');
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
+        await expect(sessionManager.finishCurrentSession('duplicate finish')).resolves.toBeUndefined();
     });
 
     it('Receives response defined by test. Use default destination', async () => {
@@ -80,5 +82,16 @@ describe('Test proxy', () => {
         expect(lines?.length).toBeGreaterThan(2);
         expect(lines![0]!).toEqual('Finished session \"my session\"');
         expect(lines![1]!).toEqual('Recorded 1 calls');
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
+        await expect(sessionManager.finishCurrentSession('duplicate finish')).resolves.toBeUndefined();
+    });
+
+    it('clears empty sessions after finishing', async () => {
+        const sessionManager = new SessionManager();
+        sessionManager.startNewSession();
+
+        await expect(sessionManager.finishCurrentSession('empty')).resolves.toEqual('No calls have been made during this session');
+
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
     });
 });

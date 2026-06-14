@@ -12,6 +12,13 @@ export class SessionManager {
     }
 
     finishCurrentSession = async (sessionName: string): Promise<string | undefined> => {
-        return this.currentSession?.logRecordedCalls(sessionName);
+        const session = this.currentSession;
+        if (!session) {
+            return undefined;
+        }
+
+        const result = await session.logRecordedCalls(sessionName);
+        this.currentSession = undefined;
+        return result;
     }
 }
