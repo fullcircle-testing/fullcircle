@@ -25,6 +25,17 @@ export type FullCircleHandler = (
     request: FullCircleRequest,
 ) => FullCircleResponse | Promise<FullCircleResponse>;
 
+export type FullCircleRouteMatcher =
+    | string
+    | {
+        method?: string;
+        path: string | RegExp;
+        query?: Record<string, string | RegExp>;
+        headers?: Record<string, string | RegExp>;
+        body?: Record<string, unknown> | ((body: FullCircleBody) => boolean);
+        strict?: boolean;
+    };
+
 export type FullCircleResponseInit = {
     status?: number;
     headers?: Record<string, string>;

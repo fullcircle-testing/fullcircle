@@ -1,10 +1,11 @@
 import express from 'express';
 import type {FullCircleInstance, SubscriptionFunc} from './fullcircle';
-import {fullCircleHandlerToExpress} from './express_adapter';
-import type {FullCircleHandler} from './primitives';
+import {fullCircleHandlerToExpress, toFullCircleRequest} from './express_adapter';
+import type {FullCircleHandler, FullCircleRouteMatcher} from './primitives';
+import {matchesRoute, routeMatcherToString} from './route_matcher';
 
 type PathHandlerClump = {
-    path: string;
+    matcher: FullCircleRouteMatcher;
     handler: express.Handler;
     called: boolean;
 }
@@ -23,9 +24,6 @@ export class TestHarness {
     }
 
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
-        const path = req.originalUrl;
-        const pathWithoutQuery = req.path;
-
         let destinationHost = this.fc.options.defaultDestination;
 
         if (!destinationHost) {
@@ -45,8 +43,10 @@ export class TestHarness {
             return false;
         }
 
+        const fullCircleRequest = toFullCircleRequest(req, destinationHost);
+
         // gets first registered mock that hasn't been called
-        const mock = this.registeredMocks.find(m => (m.path === path || m.path === pathWithoutQuery) && !m.called);
+        const mock = this.registeredMocks.find(m => !m.called && matchesRoute(m.matcher, fullCircleRequest));
         if (mock) {
             mock.called = true;
 
@@ -54,7 +54,7 @@ export class TestHarness {
             return true;
         }
 
-        const passthrough = this.registeredPassthroughs.find(m => (m.path === path || m.path === pathWithoutQuery) && !m.called);
+        const passthrough = this.registeredPassthroughs.find(m => !m.called && matchesRoute(m.matcher, fullCircleRequest));
         if (passthrough) {
             passthrough.called = true;
 
@@ -72,19 +72,19 @@ export class TestHarness {
 
         for (const mock of this.registeredMocks) {
             if (mock.called) {
-                messages.push(`Mocked response for ${mock.path}`);
+                messages.push(`Mocked response for ${routeMatcherToString(mock.matcher)}`);
             } else {
-                messages.push(`Did not receive request to mock for ${mock.path}`);
-                errors.push(`Did not receive request to mock for ${mock.path}`);
+                messages.push(`Did not receive request to mock for ${routeMatcherToString(mock.matcher)}`);
+                errors.push(`Did not receive request to mock for ${routeMatcherToString(mock.matcher)}`);
             }
         }
 
         for (const pt of this.registeredPassthroughs) {
             if (pt.called) {
-                messages.push(`Proxied response to external host for ${pt.path}`);
+                messages.push(`Proxied response to external host for ${routeMatcherToString(pt.matcher)}`);
             } else {
-                messages.push(`Did not receive request to proxy for ${pt.path}`);
-                errors.push(`Did not receive request to proxy for ${pt.path}`);
+                messages.push(`Did not receive request to proxy for ${routeMatcherToString(pt.matcher)}`);
+                errors.push(`Did not receive request to proxy for ${routeMatcherToString(pt.matcher)}`);
             }
         }
 
@@ -95,15 +95,19 @@ export class TestHarness {
     }
 
     mock = (path: string, handler: express.Handler) => {
-        this.registeredMocks.push({path, handler, called: false});
+        this.registeredMocks.push({matcher: path, handler, called: false});
     }
 
-    mockRoute = (path: string, handler: FullCircleHandler) => {
-        this.mock(path, fullCircleHandlerToExpress(handler, this.originalHost));
+    mockRoute = (matcher: FullCircleRouteMatcher, handler: FullCircleHandler) => {
+        this.registeredMocks.push({
+            matcher,
+            handler: fullCircleHandlerToExpress(handler, this.originalHost),
+            called: false,
+        });
     }
 
     passthrough = (path: string, handler: express.Handler) => {
-        this.registeredPassthroughs.push({path, handler, called: false});
+        this.registeredPassthroughs.push({matcher: path, handler, called: false});
     }
 
     [Symbol.asyncDispose] = async () => {

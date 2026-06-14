@@ -227,7 +227,13 @@ describe('Harness tests', () => {
         {
             await using th = fc.harness('api.stripe.com');
 
-            th.mockRoute('/v1/checkout/sessions', async (req) => {
+            th.mockRoute({
+                method: 'POST',
+                path: '/v1/checkout/sessions',
+                query: {'expand[]': 'line_items'},
+                headers: {authorization: /^Bearer sk_test_/},
+                body: {mode: 'subscription'},
+            }, async (req) => {
                 expect(req.method).toBe('POST');
                 expect(req.path).toBe('/v1/checkout/sessions');
                 expect(req.query.get('expand[]')).toBe('line_items');
@@ -266,6 +272,42 @@ describe('Harness tests', () => {
                 object: 'checkout.session',
             });
         }
+    });
+
+    it('harness.mockRoute - strict mode rejects unexpected query and body fields', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await (async () => {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute({
+                method: 'POST',
+                path: '/v1/checkout/sessions',
+                query: {'expand[]': 'line_items'},
+                body: {mode: 'subscription'},
+                strict: true,
+            }, () => response.json({id: 'cs_test_fullcircle_123'}));
+
+            const responseBody = await request(fc.expressApp)
+                .post('/v1/checkout/sessions?expand[]=line_items&expand[]=customer')
+                .type('form')
+                .send({
+                    mode: 'subscription',
+                    customer: 'cus_fullcircle_123',
+                })
+                .expect(404);
+
+            expect(responseBody.body).toEqual({
+                error: 'FC server received unexpected request. No registered mocks for /v1/checkout/sessions?expand[]=line_items&expand[]=customer',
+            });
+        })().then(() => {
+            throw new Error('Expected dispose method to throw an error');
+        }, error => {
+            expect(error.message).toEqual('harness assertions failed:\nDid not receive request to mock for POST /v1/checkout/sessions');
+        });
     });
 
     it('harness.passthrough - fake fetch - should route registered passthrough path', async () => {
