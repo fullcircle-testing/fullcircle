@@ -7,12 +7,11 @@ import express from 'express';
 import fetch from 'node-fetch';
 import request from 'supertest';
 
+import {diffDatabaseSnapshots, sqliteDatabase} from '../../src/database';
 import {fullcircle} from '../../src/fullcircle';
 import {stripeProvider} from '../../src/providers/stripe';
 
 const STRIPE_WEBHOOK_SECRET = 'whsec_fullcircle_test_secret';
-
-type Snapshot = Record<string, Array<Record<string, unknown>>>;
 
 const readRawBody = (req: express.Request): Promise<Buffer> => new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -62,17 +61,6 @@ const createDatabase = () => {
     `);
 
     return db;
-};
-
-const snapshotDatabase = (db: Database.Database): Snapshot => ({
-    users: db.prepare('SELECT * FROM users ORDER BY id').all() as Array<Record<string, unknown>>,
-    subscriptions: db.prepare('SELECT * FROM subscriptions ORDER BY id').all() as Array<Record<string, unknown>>,
-    processed_webhook_events: db.prepare('SELECT * FROM processed_webhook_events ORDER BY event_id').all() as Array<Record<string, unknown>>,
-});
-
-const diffInsertedRows = (before: Snapshot, after: Snapshot, table: keyof Snapshot, key: string) => {
-    const beforeKeys = new Set(before[table].map(row => row[key]));
-    return after[table].filter(row => !beforeKeys.has(row[key]));
 };
 
 const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) => {
@@ -178,6 +166,7 @@ describe('Stripe Checkout subscription dogfood acceptance', () => {
         const appServer = await new Promise<http.Server>(resolve => {
             const listener = app.listen(0, () => resolve(listener));
         });
+        const testDb = sqliteDatabase(db);
 
         try {
             const address = appServer.address();
@@ -187,7 +176,7 @@ describe('Stripe Checkout subscription dogfood acceptance', () => {
             const webhookUrl = `http://127.0.0.1:${address.port}/stripe/webhook`;
 
             await request(app).post('/api/test/login').expect(200);
-            const before = snapshotDatabase(db);
+            const before = await testDb.snapshot('before checkout');
 
             await request(app)
                 .get('/billing')
@@ -230,15 +219,17 @@ describe('Stripe Checkout subscription dogfood acceptance', () => {
                 .expect(200)
                 .expect(response => expect(response.text).toContain('Current plan: Pro'));
 
-            const after = snapshotDatabase(db);
-            expect(diffInsertedRows(before, after, 'subscriptions', 'id')).toMatchObject([{
+            const after = await testDb.snapshot('after checkout');
+            const diff = diffDatabaseSnapshots(before, after, 'checkout subscription upgrade');
+
+            expect(diff.tables.subscriptions.inserted).toMatchObject([{
                 user_id: 'user_test_123',
                 provider: 'stripe',
                 provider_customer_id: 'cus_fullcircle_123',
                 provider_subscription_id: 'sub_fullcircle_123',
                 status: 'active',
             }]);
-            expect(diffInsertedRows(before, after, 'processed_webhook_events', 'event_id')).toEqual([{
+            expect(diff.tables.processed_webhook_events.inserted).toEqual([{
                 event_id: 'evt_fullcircle_checkout_completed_123',
                 provider: 'stripe',
                 type: 'checkout.session.completed',

@@ -1,4 +1,5 @@
 export * from './fullcircle';
+export * from './database';
 export * from './harness';
 export * from './primitives';
 export * from './route_matcher';
