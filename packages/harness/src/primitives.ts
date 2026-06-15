@@ -28,6 +28,7 @@ export type FullCircleHandler = (
 export type FullCircleRouteMatcher =
     | string
     | {
+        destination?: string | RegExp;
         method?: string;
         path: string | RegExp;
         query?: Record<string, string | RegExp>;

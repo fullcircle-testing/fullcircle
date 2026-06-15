@@ -12,6 +12,10 @@ export const matchesRoute = (
         return false;
     }
 
+    if (matcher.destination && !matchesStringOrRegex(matcher.destination, request.destination)) {
+        return false;
+    }
+
     if (!matchesStringOrRegex(matcher.path, request.path)) {
         return false;
     }
