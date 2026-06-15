@@ -170,4 +170,42 @@ describe('Stripe provider webhooks', () => {
             'checkout.session.completed',
         ]);
     });
+
+    it('sends documented invoice lifecycle webhook types with valid signatures', async () => {
+        await using fc = await fullcircle({listenAddress: null});
+        await using th = fc.harness('api.stripe.com');
+        const stripe = stripeProvider(th, {
+            webhookEndpoint: webhookUrl,
+            webhookSigningSecret: 'whsec_fullcircle_test_secret',
+        });
+
+        const invoiceEvents = [
+            'invoice.created',
+            'invoice.finalization_failed',
+            'invoice.payment_action_required',
+        ] as const;
+
+        const results = await stripe.webhooks.sendSequence(invoiceEvents.map(type => ({
+            type,
+            event: {
+                id: `evt_${type.replaceAll('.', '_')}`,
+                data: {
+                    object: {
+                        id: 'in_fullcircle_123',
+                        object: 'invoice',
+                        status: 'draft',
+                    },
+                },
+            },
+        })));
+
+        expect(results.map(result => result.status)).toEqual([204, 204, 204]);
+        expect(receivedEvents.map(event => event.body.type)).toEqual([...invoiceEvents]);
+        expect(receivedEvents.every(event => event.signatureValid)).toBe(true);
+        expect(receivedEvents.map(event => event.body.data.object.id)).toEqual([
+            'in_fullcircle_123',
+            'in_fullcircle_123',
+            'in_fullcircle_123',
+        ]);
+    });
 });

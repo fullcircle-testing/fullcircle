@@ -293,6 +293,9 @@ FullCircle v1 should include fixtures for:
 - `checkout.session.expired` — user never completed Checkout.
 - `checkout.session.async_payment_failed` — delayed payment failed.
 - `checkout.session.async_payment_succeeded` — delayed payment later succeeded.
+- `invoice.created` — draft invoice created; apps may retrieve/finalize or annotate it before finalization.
+- `invoice.finalization_failed` — Stripe could not finalize an invoice; app should surface or queue remediation.
+- `invoice.payment_action_required` — payment requires customer action; app should notify user and avoid provisioning until resolved.
 - `invoice.payment_failed` — payment failed; app should notify user and not grant/revoke access according to product rules.
 - `customer.subscription.updated` — subscription status/price changed.
 - `customer.subscription.deleted` — subscription canceled/ended; app should deprovision access.

@@ -74,7 +74,10 @@ export type StripeWebhookType =
     | 'customer.subscription.created'
     | 'customer.subscription.updated'
     | 'customer.subscription.deleted'
+    | 'invoice.created'
+    | 'invoice.finalization_failed'
     | 'invoice.paid'
+    | 'invoice.payment_action_required'
     | 'invoice.payment_failed';
 
 export type StripeWebhookFixture<TType extends StripeWebhookType = StripeWebhookType> = Partial<{
