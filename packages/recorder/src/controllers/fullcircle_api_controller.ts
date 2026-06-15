@@ -28,5 +28,10 @@ export const initFullCircleApiRouter = ({sessionManager}: Deps) => {
         });
     });
 
+    fullcircleApiRouter.post('/browser-events', async (req, res) => {
+        sessionManager.recordBrowserEvent(req.body);
+        res.status(202).json({ok: true});
+    });
+
     return fullcircleApiRouter;
 };

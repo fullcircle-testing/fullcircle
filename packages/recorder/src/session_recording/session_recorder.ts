@@ -1,5 +1,10 @@
 import fs from 'node:fs/promises';
 
+import {
+    FullCircleBrowserEvent,
+    FullCircleSessionArtifact,
+    recordedCallsToSessionArtifact,
+} from '../session_artifact';
 import {RecordedCall} from '../types';
 
 export type HttpRequestSummary = {
@@ -21,26 +26,41 @@ export type SessionSummary = {
 export type FinishedSessionResult = SessionSummary & {
     outputPath?: string;
     message: string;
+    artifact: FullCircleSessionArtifact;
 };
 
 export type RecordingSessionStatus = {
     startedAt: string;
     callCount: number;
+    browserEventCount: number;
     recentCalls: HttpRequestSummary[];
+};
+
+export type RecordedBrowserEvent = {
+    id?: string;
+    at: string;
+    correlationId?: string;
+    event: FullCircleBrowserEvent;
 };
 
 export class RecordingSession {
     private startTime: Date = new Date();
     private recordedCalls: RecordedCall[] = [];
+    private browserEvents: RecordedBrowserEvent[] = [];
 
     addCallToSession = (call: RecordedCall) => {
         this.recordedCalls.push(call);
         // this.logRecordedCalls('');
     }
 
+    addBrowserEventToSession = (event: RecordedBrowserEvent) => {
+        this.browserEvents.push(event);
+    }
+
     getStatus = (): RecordingSessionStatus => ({
         startedAt: this.startTime.toISOString(),
         callCount: this.recordedCalls.length,
+        browserEventCount: this.browserEvents.length,
         recentCalls: this.recordedCalls.slice(-20).map(call => ({
             host: call.host,
             path: call.requestPath,
@@ -50,14 +70,22 @@ export class RecordingSession {
     });
 
     finish = async (sessionName: string): Promise<FinishedSessionResult> => {
-        if (!this.recordedCalls.length) {
+        if (!this.recordedCalls.length && !this.browserEvents.length) {
             const endTime = new Date().toISOString();
+            const artifact = recordedCallsToSessionArtifact({
+                name: sessionName,
+                startedAt: this.startTime.toISOString(),
+                endedAt: endTime,
+                calls: [],
+                browserEvents: this.browserEvents,
+            });
             return {
                 sessionName,
                 startTime: this.startTime.toISOString(),
                 endTime,
                 numCalls: 0,
                 calls: [],
+                artifact,
                 message: 'No calls have been made during this session',
             };
         }
@@ -120,11 +148,20 @@ export class RecordingSession {
         }
 
         await fs.writeFile(withTopFolder('summary.json'), JSON.stringify(summary, null, 2));
+        const artifact = recordedCallsToSessionArtifact({
+            name: sessionName,
+            startedAt: this.startTime.toISOString(),
+            endedAt: new Date().toISOString(),
+            calls: this.recordedCalls,
+            browserEvents: this.browserEvents,
+        });
+        await fs.writeFile(withTopFolder('session.fullcircle.json'), JSON.stringify(artifact, null, 2));
 
         const message = `Finished session "${sessionName}"\nRecorded ${this.recordedCalls.length} calls\nStart ${this.startTime.toISOString()} End ${endTime}\nOutput ${topFolderName}`;
         return {
             ...summary,
             outputPath: topFolderName,
+            artifact,
             message,
         };
     }

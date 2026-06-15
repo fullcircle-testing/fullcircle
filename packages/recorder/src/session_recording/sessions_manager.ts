@@ -2,6 +2,7 @@ import {
     FinishedSessionResult,
     RecordingSession,
     RecordingSessionStatus,
+    RecordedBrowserEvent,
 } from './session_recorder';
 
 export type SessionManagerStatus = {
@@ -31,6 +32,13 @@ export class SessionManager {
             recentCalls: currentSession?.recentCalls ?? [],
             lastFinishedSession: this.lastFinishedSession,
         };
+    }
+
+    recordBrowserEvent = (event: RecordedBrowserEvent) => {
+        this.currentSession?.addBrowserEventToSession({
+            ...event,
+            at: event.at || new Date().toISOString(),
+        });
     }
 
     finishCurrentSessionDetails = async (sessionName: string): Promise<FinishedSessionResult | undefined> => {

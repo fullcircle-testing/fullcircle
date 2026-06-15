@@ -92,4 +92,43 @@ describe('FullCircle session artifact schema', () => {
             }],
         });
     });
+
+    it('adds browser events to session artifacts and keeps timeline chronology', () => {
+        expect(recordedCallsToSessionArtifact({
+            name: 'checkout browser flow',
+            startedAt: '2026-06-15T12:00:00.000Z',
+            endedAt: '2026-06-15T12:00:03.000Z',
+            calls: [],
+            browserEvents: [{
+                id: 'browser-click-upgrade',
+                at: '2026-06-15T12:00:01.000Z',
+                correlationId: 'fc-correlation-1',
+                event: {
+                    type: 'click',
+                    url: 'http://localhost:5173/billing',
+                    selector: 'button#upgrade',
+                    label: 'Upgrade to Pro',
+                },
+            }],
+        })).toMatchObject({
+            browserEvents: [{
+                type: 'click',
+                url: 'http://localhost:5173/billing',
+                selector: 'button#upgrade',
+                label: 'Upgrade to Pro',
+            }],
+            timeline: [{
+                id: 'browser-click-upgrade',
+                at: '2026-06-15T12:00:01.000Z',
+                correlationId: 'fc-correlation-1',
+                kind: 'browser.event',
+                event: {
+                    type: 'click',
+                    url: 'http://localhost:5173/billing',
+                    selector: 'button#upgrade',
+                    label: 'Upgrade to Pro',
+                },
+            }],
+        });
+    });
 });

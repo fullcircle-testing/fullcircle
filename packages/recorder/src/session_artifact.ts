@@ -189,16 +189,44 @@ export const recordedCallToHttpExchangeEvent = (
     },
 });
 
+export const browserEventToTimelineEvent = (
+    input: {
+        id?: string;
+        at: string;
+        correlationId?: string;
+        event: FullCircleBrowserEvent;
+    },
+    index: number,
+): FullCircleBrowserTimelineEvent => ({
+    id: input.id || `browser-${index + 1}`,
+    at: input.at,
+    correlationId: input.correlationId,
+    kind: 'browser.event',
+    event: input.event,
+});
+
 export const recordedCallsToSessionArtifact = (input: {
     name: string;
     startedAt: string;
     endedAt: string;
     calls: RecordedCall[];
+    browserEvents?: Array<{
+        id?: string;
+        at: string;
+        correlationId?: string;
+        event: FullCircleBrowserEvent;
+    }>;
     metadata?: Record<string, unknown>;
-}): FullCircleSessionArtifact => ({
-    ...createEmptySessionArtifact(input),
-    timeline: input.calls.map(recordedCallToHttpExchangeEvent),
-});
+}): FullCircleSessionArtifact => {
+    const httpEvents = input.calls.map(recordedCallToHttpExchangeEvent);
+    const browserEvents = (input.browserEvents || []).map(browserEventToTimelineEvent);
+
+    return {
+        ...createEmptySessionArtifact(input),
+        timeline: [...httpEvents, ...browserEvents].sort((left, right) => left.at.localeCompare(right.at)),
+        browserEvents: browserEvents.map(event => event.event),
+    };
+};
 
 const normalizeHeaders = (
     headers: RecordedCall['requestHeaders'] | RecordedCall['responseHeaders'],

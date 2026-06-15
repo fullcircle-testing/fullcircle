@@ -194,4 +194,58 @@ describe('Test proxy', () => {
                 expect(response.text).toContain('/fullcircle/api/status');
             });
     });
+
+    it('records browser interaction events and writes them to the session artifact', async () => {
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, includeHeaders: false});
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200);
+
+        await request(app)
+            .post('/fullcircle/api/browser-events')
+            .send({
+                id: 'browser-1',
+                at: '2026-06-15T12:00:00.000Z',
+                correlationId: 'fc-correlation-1',
+                event: {
+                    type: 'click',
+                    url: 'http://localhost:5173/billing',
+                    selector: 'button#upgrade',
+                    label: 'Upgrade to Pro',
+                    metadata: {tagName: 'BUTTON'},
+                },
+            })
+            .expect(202)
+            .expect(response => expect(response.body).toEqual({ok: true}));
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body.currentSession.browserEventCount).toBe(1));
+
+        const result = await sessionManager.finishCurrentSessionDetails('browser event session');
+        expect(result?.outputPath).toEqual(expect.any(String));
+        expect(result?.artifact.browserEvents).toEqual([{
+            type: 'click',
+            url: 'http://localhost:5173/billing',
+            selector: 'button#upgrade',
+            label: 'Upgrade to Pro',
+            metadata: {tagName: 'BUTTON'},
+        }]);
+        expect(result?.artifact.timeline).toContainEqual({
+            id: 'browser-1',
+            at: '2026-06-15T12:00:00.000Z',
+            correlationId: 'fc-correlation-1',
+            kind: 'browser.event',
+            event: {
+                type: 'click',
+                url: 'http://localhost:5173/billing',
+                selector: 'button#upgrade',
+                label: 'Upgrade to Pro',
+                metadata: {tagName: 'BUTTON'},
+            },
+        });
+    });
 });
