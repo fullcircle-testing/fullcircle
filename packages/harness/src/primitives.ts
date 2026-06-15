@@ -36,6 +36,19 @@ export type FullCircleRouteMatcher =
         strict?: boolean;
     };
 
+export type FullCircleInvocationCardinality =
+    | number
+    | 'any'
+    | {
+        min?: number;
+        max?: number;
+    };
+
+export type FullCircleExpectationOptions = {
+    name?: string;
+    times?: FullCircleInvocationCardinality;
+};
+
 export type FullCircleResponseInit = {
     status?: number;
     headers?: Record<string, string>;

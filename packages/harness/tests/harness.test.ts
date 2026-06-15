@@ -97,7 +97,12 @@ describe('Harness tests', () => {
                 logError(rejected);
             }
 
-            expect(rejected.message).toEqual('harness assertions failed:\nDid not receive request to mock for /api/repos');
+            expect(rejected.message).toEqual([
+                'harness assertions failed:',
+                'Did not receive request to mock for /api/repos',
+                'Actual requests received by api.github.com:',
+                '- GET /api/other',
+            ].join('\n'));
         });
 
         expect(blockedFinished).toBe(true);
@@ -177,7 +182,12 @@ describe('Harness tests', () => {
                 logError(rejected);
             }
 
-            expect(rejected.message).toEqual('harness assertions failed:\nDid not receive request to mock for /api/repos');
+            expect(rejected.message).toEqual([
+                'harness assertions failed:',
+                'Did not receive request to mock for /api/repos',
+                'Actual requests received by api.github.com:',
+                '- GET /api/other',
+            ].join('\n'));
         });
 
         expect(blockedFinished).toBe(true);
@@ -306,8 +316,127 @@ describe('Harness tests', () => {
         })().then(() => {
             throw new Error('Expected dispose method to throw an error');
         }, error => {
-            expect(error.message).toEqual('harness assertions failed:\nDid not receive request to mock for POST /v1/checkout/sessions');
+            expect(error.message).toEqual([
+                'harness assertions failed:',
+                'Did not receive request to mock for POST /v1/checkout/sessions',
+                'Actual requests received by api.stripe.com:',
+                '- POST /v1/checkout/sessions?expand[]=line_items&expand[]=customer body={"mode":"subscription","customer":"cus_fullcircle_123"}',
+            ].join('\n'));
         });
+    });
+
+    it('harness.mockRoute - supports exact invocation cardinality for retried requests', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        let calls = 0;
+        {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute('/v1/customers/cus_fullcircle', () => {
+                calls += 1;
+                return response.json({id: 'cus_fullcircle', call: calls});
+            }, {
+                name: 'retrieve Stripe customer after checkout',
+                times: 2,
+            });
+
+            const firstResponse = await request(fc.expressApp)
+                .get('/v1/customers/cus_fullcircle')
+                .expect(200);
+            expect(firstResponse.body).toEqual({id: 'cus_fullcircle', call: 1});
+
+            const retryResponse = await request(fc.expressApp)
+                .get('/v1/customers/cus_fullcircle')
+                .expect(200);
+            expect(retryResponse.body).toEqual({id: 'cus_fullcircle', call: 2});
+        }
+
+        expect(calls).toBe(2);
+    });
+
+    it('harness.mockRoute - reports names, call counts, and actual requests when cardinality fails', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await (async () => {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute({
+                method: 'GET',
+                path: '/v1/subscriptions/sub_fullcircle',
+            }, () => response.json({id: 'sub_fullcircle'}), {
+                name: 'retrieve subscription after checkout webhook',
+                times: {min: 2, max: 3},
+            });
+
+            await request(fc.expressApp)
+                .get('/v1/subscriptions/sub_fullcircle')
+                .expect(200);
+        })().then(() => {
+            throw new Error('Expected dispose method to throw an error');
+        }, error => {
+            expect(error.message).toEqual([
+                'harness assertions failed:',
+                'Expected mock "retrieve subscription after checkout webhook" for GET /v1/subscriptions/sub_fullcircle to be called at least 2 times, but it was called 1 time',
+                'Actual requests received by api.stripe.com:',
+                '- GET /v1/subscriptions/sub_fullcircle',
+            ].join('\n'));
+        });
+    });
+
+    it('harness.mockRoute - reports when requests exceed max cardinality', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await (async () => {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute('/v1/prices/price_pro_monthly', () => response.json({id: 'price_pro_monthly'}), {
+                name: 'retrieve Stripe price once',
+                times: {max: 1},
+            });
+
+            await request(fc.expressApp)
+                .get('/v1/prices/price_pro_monthly')
+                .expect(200);
+
+            await request(fc.expressApp)
+                .get('/v1/prices/price_pro_monthly')
+                .expect(404);
+        })().then(() => {
+            throw new Error('Expected dispose method to throw an error');
+        }, error => {
+            expect(error.message).toEqual([
+                'harness assertions failed:',
+                'Expected mock "retrieve Stripe price once" for /v1/prices/price_pro_monthly to be called at most 1 time, but it was called 2 times',
+                'Actual requests received by api.stripe.com:',
+                '- GET /v1/prices/price_pro_monthly',
+                '- GET /v1/prices/price_pro_monthly',
+            ].join('\n'));
+        });
+    });
+
+    it('harness.mockRoute - supports any invocation cardinality for optional requests', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        {
+            await using th = fc.harness('api.stripe.com');
+
+            th.mockRoute('/v1/events', () => response.json({data: []}), {
+                name: 'optional Stripe event poll',
+                times: 'any',
+            });
+        }
     });
 
     it('harness.passthrough - fake fetch - should route registered passthrough path', async () => {

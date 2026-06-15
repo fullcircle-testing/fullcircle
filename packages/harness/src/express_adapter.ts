@@ -89,6 +89,10 @@ const toFullCircleBody = (req: express.Request): FullCircleBody => {
 
     const contentType = req.header('content-type') || '';
 
+    if (contentType === '' && isEmptyRecord(req.body)) {
+        return {kind: 'empty'};
+    }
+
     if (Buffer.isBuffer(req.body)) {
         return {kind: 'bytes', value: new Uint8Array(req.body)};
     }
@@ -112,4 +116,11 @@ const isStringRecord = (value: unknown): value is Record<string, string | string
     return Object.values(value).every(item => typeof item === 'string' || (
         Array.isArray(item) && item.every(entry => typeof entry === 'string')
     ));
+};
+
+const isEmptyRecord = (value: unknown): value is Record<string, never> => {
+    return value !== null
+        && typeof value === 'object'
+        && !Array.isArray(value)
+        && Object.keys(value).length === 0;
 };
