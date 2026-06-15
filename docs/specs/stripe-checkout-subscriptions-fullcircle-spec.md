@@ -14,7 +14,7 @@ Implement first-class FullCircle support for Stripe Checkout subscription flows 
 4. Deliver Stripe-like webhook events with valid signatures.
 5. Record, sanitize, and replay the provider API calls, webhook events, browser actions, and SQLite DB effects.
 
-This spec is scoped to **hosted Checkout Sessions in `subscription` mode**. One-time payments, Stripe Elements, customer portal, metered billing, and Connect are future expansions. Embedded Checkout now has a separate contract in `docs/specs/stripe-embedded-checkout-provider-contract.md`; FullCircle should keep that API distinct from hosted Checkout so the two browser journeys are not partially emulated through one ambiguous fixture.
+This spec is scoped to **hosted Checkout Sessions in `subscription` mode**. One-time payments, customer portal, metered billing, and Connect are future expansions. Embedded Checkout now has a separate contract in `docs/specs/stripe-embedded-checkout-provider-contract.md`; Stripe Elements / Payment Element now has a separate design contract in `docs/specs/stripe-elements-provider-contract.md`. FullCircle should keep these APIs distinct from hosted Checkout so the browser journeys are not partially emulated through one ambiguous fixture.
 
 ## Primary Stripe lifecycle to model
 
