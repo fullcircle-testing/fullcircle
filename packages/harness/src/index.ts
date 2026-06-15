@@ -16,3 +16,4 @@ export * from './providers/ai_usage';
 export * from './providers/google_sheets';
 export * from './providers/hubspot';
 export * from './providers/attio';
+export * from './providers/google_places';
