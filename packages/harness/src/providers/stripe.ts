@@ -4,7 +4,7 @@ import type express from 'express';
 
 import type {TestHarness} from '../harness';
 
-type MaybeMatcher<T> = T | ((actual: T | undefined) => boolean);
+type MaybeMatcher<T> = T | (T extends string ? RegExp : never) | ((actual: T | undefined) => boolean);
 
 type StripeFormBody = Record<string, unknown>;
 
@@ -66,6 +66,30 @@ export type StripeCheckoutSessionLineItemsExpectation = {
     };
 };
 
+type StripeObjectFixture = Record<string, unknown> & {id?: string; object?: string};
+type StripeFieldMatchers = Record<string, MaybeMatcher<string>>;
+
+export type StripeListExpectation<TFixture extends StripeObjectFixture = StripeObjectFixture> = {
+    match?: StripeFieldMatchers;
+    reply?: TFixture[];
+};
+
+export type StripeCreateExpectation<TFixture extends StripeObjectFixture = StripeObjectFixture> = {
+    match?: StripeFieldMatchers;
+    reply?: TFixture;
+};
+
+export type StripeRetrieveExpectation<TFixture extends StripeObjectFixture = StripeObjectFixture> = {
+    id: string;
+    reply?: TFixture;
+};
+
+export type StripeUpdateExpectation<TFixture extends StripeObjectFixture = StripeObjectFixture> = {
+    id: string;
+    match?: StripeFieldMatchers;
+    reply?: TFixture;
+};
+
 export type StripeWebhookType =
     | 'checkout.session.completed'
     | 'checkout.session.async_payment_succeeded'
@@ -122,6 +146,38 @@ export type StripeProviderOptions = {
 };
 
 export type StripeProviderHarness = {
+    customers: {
+        list: (expectation: StripeListExpectation) => void;
+        create: (expectation: StripeCreateExpectation) => void;
+    };
+    products: {
+        list: (expectation: StripeListExpectation) => void;
+        retrieve: (expectation: StripeRetrieveExpectation) => void;
+        create: (expectation: StripeCreateExpectation) => void;
+        update: (expectation: StripeUpdateExpectation) => void;
+        search: (expectation: StripeListExpectation) => void;
+    };
+    prices: {
+        list: (expectation: StripeListExpectation) => void;
+        retrieve: (expectation: StripeRetrieveExpectation) => void;
+        create: (expectation: StripeCreateExpectation) => void;
+        update: (expectation: StripeUpdateExpectation) => void;
+    };
+    subscriptions: {
+        list: (expectation: StripeListExpectation) => void;
+        retrieve: (expectation: StripeRetrieveExpectation) => void;
+        update: (expectation: StripeUpdateExpectation) => void;
+    };
+    invoices: {
+        list: (expectation: StripeListExpectation) => void;
+        retrieve: (expectation: StripeRetrieveExpectation) => void;
+        finalize: (expectation: StripeUpdateExpectation) => void;
+    };
+    billingPortal: {
+        sessions: {
+            create: (expectation: StripeCreateExpectation) => void;
+        };
+    };
     checkout: {
         sessions: {
             create: (expectation: StripeCheckoutSessionCreateExpectation) => void;
@@ -145,6 +201,52 @@ export type StripeProviderHarness = {
 const CHECKOUT_SESSIONS_PATH = '/v1/checkout/sessions';
 
 export const stripeProvider = (harness: TestHarness, options: StripeProviderOptions = {}): StripeProviderHarness => ({
+    customers: {
+        list: expectation => mockStripeList(harness, '/v1/customers', expectation, 'customer'),
+        create: expectation => mockStripeCreate(harness, '/v1/customers', expectation, 'customer', 'cus_fullcircle_123'),
+    },
+    products: {
+        list: expectation => mockStripeList(harness, '/v1/products', expectation, 'product'),
+        retrieve: expectation => mockStripeRetrieve(harness, '/v1/products', expectation, 'product'),
+        create: expectation => mockStripeCreate(harness, '/v1/products', expectation, 'product', 'prod_fullcircle_123'),
+        update: expectation => mockStripeUpdate(harness, '/v1/products', expectation, 'product'),
+        search: expectation => mockStripeList(harness, '/v1/products/search', expectation, 'product'),
+    },
+    prices: {
+        list: expectation => mockStripeList(harness, '/v1/prices', expectation, 'price'),
+        retrieve: expectation => mockStripeRetrieve(harness, '/v1/prices', expectation, 'price'),
+        create: expectation => mockStripeCreate(harness, '/v1/prices', expectation, 'price', 'price_fullcircle_123'),
+        update: expectation => mockStripeUpdate(harness, '/v1/prices', expectation, 'price'),
+    },
+    subscriptions: {
+        list: expectation => mockStripeList(harness, '/v1/subscriptions', expectation, 'subscription'),
+        retrieve: expectation => mockStripeRetrieve(harness, '/v1/subscriptions', expectation, 'subscription'),
+        update: expectation => mockStripeUpdate(harness, '/v1/subscriptions', expectation, 'subscription'),
+    },
+    invoices: {
+        list: expectation => mockStripeList(harness, '/v1/invoices', expectation, 'invoice'),
+        retrieve: expectation => mockStripeRetrieve(harness, '/v1/invoices', expectation, 'invoice'),
+        finalize: expectation => {
+            harness.mock(`/v1/invoices/${expectation.id}/finalize`, makeStripeExpectationHandler({
+                method: 'POST',
+                expectation,
+                objectType: 'invoice',
+                defaultId: expectation.id,
+                bodySource: 'body',
+            }));
+        },
+    },
+    billingPortal: {
+        sessions: {
+            create: expectation => mockStripeCreate(
+                harness,
+                '/v1/billing_portal/sessions',
+                expectation,
+                'billing_portal.session',
+                'bps_fullcircle_123',
+            ),
+        },
+    },
     checkout: {
         sessions: {
             create: (expectation) => {
@@ -193,6 +295,150 @@ export const stripeProvider = (harness: TestHarness, options: StripeProviderOpti
         },
     },
 });
+
+const mockStripeList = (
+    harness: TestHarness,
+    path: string,
+    expectation: StripeListExpectation,
+    objectType: string,
+) => {
+    harness.mock(path, makeStripeExpectationHandler({
+        method: 'GET',
+        expectation,
+        objectType,
+        defaultId: `${objectType}_fullcircle_123`,
+        bodySource: 'query',
+        listPath: path,
+    }));
+};
+
+const mockStripeRetrieve = (
+    harness: TestHarness,
+    basePath: string,
+    expectation: StripeRetrieveExpectation,
+    objectType: string,
+) => {
+    harness.mock(`${basePath}/${expectation.id}`, makeStripeExpectationHandler({
+        method: 'GET',
+        expectation,
+        objectType,
+        defaultId: expectation.id,
+        bodySource: 'query',
+    }));
+};
+
+const mockStripeCreate = (
+    harness: TestHarness,
+    path: string,
+    expectation: StripeCreateExpectation,
+    objectType: string,
+    defaultId: string,
+) => {
+    harness.mock(path, makeStripeExpectationHandler({
+        method: 'POST',
+        expectation,
+        objectType,
+        defaultId,
+        bodySource: 'body',
+    }));
+};
+
+const mockStripeUpdate = (
+    harness: TestHarness,
+    basePath: string,
+    expectation: StripeUpdateExpectation,
+    objectType: string,
+) => {
+    harness.mock(`${basePath}/${expectation.id}`, makeStripeExpectationHandler({
+        method: 'POST',
+        expectation,
+        objectType,
+        defaultId: expectation.id,
+        bodySource: 'body',
+    }));
+};
+
+const makeStripeExpectationHandler = (input: {
+    method: 'GET' | 'POST';
+    expectation: StripeListExpectation | StripeCreateExpectation | StripeRetrieveExpectation | StripeUpdateExpectation;
+    objectType: string;
+    defaultId: string;
+    bodySource: 'body' | 'query';
+    listPath?: string;
+}): express.Handler => (req, res) => {
+    if (req.method !== input.method) {
+        res.status(405).json({error: `Expected ${input.method} for Stripe ${input.objectType}`});
+        return;
+    }
+
+    const values = input.bodySource === 'query'
+        ? normalizeStripeFormBody(req.query)
+        : normalizeStripeFormBody(req.body);
+    const match = 'match' in input.expectation ? input.expectation.match : undefined;
+    const mismatches = collectFieldMismatches(values, match);
+    if (mismatches.length) {
+        res.status(422).json({
+            error: `Stripe ${input.objectType} request did not match expectations`,
+            mismatches,
+        });
+        return;
+    }
+
+    if ('reply' in input.expectation && Array.isArray(input.expectation.reply)) {
+        res.json({
+            object: 'list',
+            data: input.expectation.reply,
+            has_more: false,
+            url: input.listPath || req.path,
+        });
+        return;
+    }
+
+    const reply = 'reply' in input.expectation && !Array.isArray(input.expectation.reply)
+        ? input.expectation.reply
+        : undefined;
+    res.json(buildStripeObjectFixture(
+        input.defaultId,
+        input.objectType,
+        values,
+        reply,
+    ));
+};
+
+const collectFieldMismatches = (
+    values: StripeFormBody,
+    match: StripeFieldMatchers | undefined,
+): string[] => {
+    const mismatches: string[] = [];
+    for (const [field, matcher] of Object.entries(match || {})) {
+        assertMatch(mismatches, field, getString(values, field), matcher);
+    }
+    return mismatches;
+};
+
+const buildStripeObjectFixture = (
+    defaultId: string,
+    objectType: string,
+    values: StripeFormBody,
+    reply: StripeObjectFixture | undefined,
+): StripeObjectFixture => ({
+    id: defaultId,
+    object: objectType,
+    ...stringValues(values),
+    ...reply,
+});
+
+const stringValues = (values: StripeFormBody): Record<string, string> => {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(values)) {
+        if (typeof value === 'string') {
+            result[key] = value;
+        } else if (Array.isArray(value) && typeof value[0] === 'string') {
+            result[key] = value[0];
+        }
+    }
+    return result;
+};
 
 const makeCheckoutSessionCreateHandler = (expectation: StripeCheckoutSessionCreateExpectation): express.Handler => {
     return (req, res) => {
@@ -275,6 +521,8 @@ const assertMatch = <T extends string | number | boolean>(
 
     const matched = typeof matcher === 'function'
         ? matcher(actual)
+        : matcher instanceof RegExp
+            ? typeof actual === 'string' && matcher.test(actual)
         : actual === matcher;
 
     if (!matched) {

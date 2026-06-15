@@ -256,4 +256,147 @@ describe('Stripe provider harness', () => {
         });
     });
 
+    it('supports customer list-by-email and create fixtures', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await using th = fc.harness('api.stripe.com');
+        const stripe = stripeProvider(th);
+        stripe.customers.list({
+            match: {email: 'customer@example.test'},
+            reply: [{id: 'cus_fullcircle_123', object: 'customer', email: 'customer@example.test'}],
+        });
+        stripe.customers.create({
+            match: {email: 'new@example.test', name: 'New Customer'},
+            reply: {id: 'cus_fullcircle_new', object: 'customer'},
+        });
+
+        const listResponse = await request(fc.expressApp)
+            .get('/v1/customers?email=customer%40example.test')
+            .expect(200);
+        expect(listResponse.body).toEqual({
+            object: 'list',
+            data: [{id: 'cus_fullcircle_123', object: 'customer', email: 'customer@example.test'}],
+            has_more: false,
+            url: '/v1/customers',
+        });
+
+        const createResponse = await request(fc.expressApp)
+            .post('/v1/customers')
+            .type('form')
+            .send({email: 'new@example.test', name: 'New Customer'})
+            .expect(200);
+        expect(createResponse.body).toMatchObject({
+            id: 'cus_fullcircle_new',
+            object: 'customer',
+            email: 'new@example.test',
+            name: 'New Customer',
+        });
+    });
+
+    it('supports product and price admin-sync fixtures', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await using th = fc.harness('api.stripe.com');
+        const stripe = stripeProvider(th);
+        stripe.products.list({reply: [{id: 'prod_booking', object: 'product', name: 'Booking'}]});
+        stripe.products.search({
+            match: {query: 'metadata["soundspace_product_type"]:"pause"'},
+            reply: [{id: 'prod_pause', object: 'product', metadata: {soundspace_product_type: 'pause'}}],
+        });
+        stripe.products.create({
+            match: {name: /Piano Room/},
+            reply: {id: 'prod_room', object: 'product'},
+        });
+        stripe.prices.create({
+            match: {product: 'prod_room', 'recurring[interval]': 'month'},
+            reply: {id: 'price_room_monthly', object: 'price'},
+        });
+        stripe.prices.list({
+            match: {product: 'prod_pause'},
+            reply: [{id: 'price_pause', object: 'price', product: 'prod_pause'}],
+        });
+
+        expect((await request(fc.expressApp).get('/v1/products').expect(200)).body.data)
+            .toEqual([{id: 'prod_booking', object: 'product', name: 'Booking'}]);
+        expect((await request(fc.expressApp)
+            .get('/v1/products/search?query=metadata%5B%22soundspace_product_type%22%5D%3A%22pause%22')
+            .expect(200)).body.data)
+            .toEqual([{id: 'prod_pause', object: 'product', metadata: {soundspace_product_type: 'pause'}}]);
+        expect((await request(fc.expressApp)
+            .post('/v1/products')
+            .type('form')
+            .send({name: 'Piano Room Subscription'})
+            .expect(200)).body)
+            .toMatchObject({id: 'prod_room', object: 'product', name: 'Piano Room Subscription'});
+        expect((await request(fc.expressApp)
+            .post('/v1/prices')
+            .type('form')
+            .send({product: 'prod_room', 'recurring[interval]': 'month'})
+            .expect(200)).body)
+            .toMatchObject({id: 'price_room_monthly', object: 'price', product: 'prod_room'});
+        expect((await request(fc.expressApp)
+            .get('/v1/prices?product=prod_pause')
+            .expect(200)).body.data)
+            .toEqual([{id: 'price_pause', object: 'price', product: 'prod_pause'}]);
+    });
+
+    it('supports subscription, invoice, and billing portal fixtures', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+            defaultDestination: 'api.stripe.com',
+        });
+
+        await using th = fc.harness('api.stripe.com');
+        const stripe = stripeProvider(th);
+        stripe.subscriptions.retrieve({id: 'sub_fullcircle_123', reply: {status: 'active'}});
+        stripe.subscriptions.list({
+            match: {customer: 'cus_fullcircle_123'},
+            reply: [{id: 'sub_fullcircle_123', object: 'subscription', customer: 'cus_fullcircle_123'}],
+        });
+        stripe.subscriptions.update({
+            id: 'sub_fullcircle_123',
+            match: {cancel_at_period_end: 'true'},
+            reply: {cancel_at_period_end: true},
+        });
+        stripe.invoices.retrieve({id: 'in_fullcircle_123', reply: {status: 'draft'}});
+        stripe.invoices.finalize({id: 'in_fullcircle_123', reply: {status: 'open'}});
+        stripe.invoices.list({
+            match: {subscription: 'sub_fullcircle_123'},
+            reply: [{id: 'in_fullcircle_123', object: 'invoice', subscription: 'sub_fullcircle_123'}],
+        });
+        stripe.billingPortal.sessions.create({
+            match: {customer: 'cus_fullcircle_123'},
+            reply: {id: 'bps_fullcircle_123', object: 'billing_portal.session', url: 'http://localhost:7331/portal'},
+        });
+
+        expect((await request(fc.expressApp).get('/v1/subscriptions/sub_fullcircle_123').expect(200)).body)
+            .toMatchObject({id: 'sub_fullcircle_123', object: 'subscription', status: 'active'});
+        expect((await request(fc.expressApp).get('/v1/subscriptions?customer=cus_fullcircle_123').expect(200)).body.data)
+            .toEqual([{id: 'sub_fullcircle_123', object: 'subscription', customer: 'cus_fullcircle_123'}]);
+        expect((await request(fc.expressApp)
+            .post('/v1/subscriptions/sub_fullcircle_123')
+            .type('form')
+            .send({cancel_at_period_end: 'true'})
+            .expect(200)).body)
+            .toMatchObject({id: 'sub_fullcircle_123', object: 'subscription', cancel_at_period_end: true});
+        expect((await request(fc.expressApp).get('/v1/invoices/in_fullcircle_123').expect(200)).body)
+            .toMatchObject({id: 'in_fullcircle_123', object: 'invoice', status: 'draft'});
+        expect((await request(fc.expressApp).post('/v1/invoices/in_fullcircle_123/finalize').expect(200)).body)
+            .toMatchObject({id: 'in_fullcircle_123', object: 'invoice', status: 'open'});
+        expect((await request(fc.expressApp).get('/v1/invoices?subscription=sub_fullcircle_123').expect(200)).body.data)
+            .toEqual([{id: 'in_fullcircle_123', object: 'invoice', subscription: 'sub_fullcircle_123'}]);
+        expect((await request(fc.expressApp)
+            .post('/v1/billing_portal/sessions')
+            .type('form')
+            .send({customer: 'cus_fullcircle_123'})
+            .expect(200)).body)
+            .toMatchObject({id: 'bps_fullcircle_123', object: 'billing_portal.session', url: 'http://localhost:7331/portal'});
+    });
+
 });
