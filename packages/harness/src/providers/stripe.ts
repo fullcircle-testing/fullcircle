@@ -23,15 +23,19 @@ export type StripeCheckoutSessionFixture = {
     id: string;
     object: 'checkout.session';
     mode: 'subscription';
+    ui_mode: 'hosted_page' | 'embedded_page' | 'elements' | null;
     status: 'open' | 'complete' | 'expired';
     payment_status: 'paid' | 'unpaid' | 'no_payment_required';
     customer: string | null;
     subscription: string | null;
+    client_secret: string | null;
     client_reference_id: string | null;
     metadata: Record<string, string>;
+    return_url: string | null;
     success_url: string | null;
     cancel_url: string | null;
     allow_promotion_codes: boolean | null;
+    redirect_on_completion: 'always' | 'if_required' | null;
     url: string | null;
     livemode: boolean;
 };
@@ -50,6 +54,14 @@ export type StripeCheckoutSessionCreateExpectation = {
         metadata?: Record<string, MaybeMatcher<string>>;
         subscriptionMetadata?: Record<string, MaybeMatcher<string>>;
         trial?: StripeCheckoutTrialExpectation;
+    };
+    reply?: Partial<StripeCheckoutSessionFixture>;
+};
+
+export type StripeEmbeddedCheckoutSessionCreateExpectation = {
+    match?: Omit<NonNullable<StripeCheckoutSessionCreateExpectation['match']>, 'mode' | 'successUrl' | 'cancelUrl'> & {
+        returnUrl?: MaybeMatcher<string>;
+        redirectOnCompletion?: MaybeMatcher<string>;
     };
     reply?: Partial<StripeCheckoutSessionFixture>;
 };
@@ -184,6 +196,11 @@ export type StripeProviderHarness = {
             retrieve: (expectation: StripeCheckoutSessionRetrieveExpectation) => void;
             lineItems: (expectation: StripeCheckoutSessionLineItemsExpectation) => void;
         };
+        embedded: {
+            sessions: {
+                createSubscription: (expectation: StripeEmbeddedCheckoutSessionCreateExpectation) => void;
+            };
+        };
     };
     webhooks: {
         send: <TType extends StripeWebhookType>(
@@ -276,6 +293,13 @@ export const stripeProvider = (harness: TestHarness, options: StripeProviderOpti
                         url: `${CHECKOUT_SESSIONS_PATH}/${expectation.sessionId}/line_items`,
                     });
                 });
+            },
+        },
+        embedded: {
+            sessions: {
+                createSubscription: (expectation) => {
+                    harness.mock(CHECKOUT_SESSIONS_PATH, makeEmbeddedCheckoutSessionCreateHandler(expectation));
+                },
             },
         },
     },
@@ -462,6 +486,30 @@ const makeCheckoutSessionCreateHandler = (expectation: StripeCheckoutSessionCrea
     };
 };
 
+const makeEmbeddedCheckoutSessionCreateHandler = (
+    expectation: StripeEmbeddedCheckoutSessionCreateExpectation,
+): express.Handler => {
+    return (req, res) => {
+        if (req.method !== 'POST') {
+            res.status(405).json({error: 'Expected POST for Stripe embedded Checkout Session create'});
+            return;
+        }
+
+        const body = normalizeStripeFormBody(req.body);
+        const mismatches = collectEmbeddedCheckoutSessionCreateMismatches(body, expectation);
+
+        if (mismatches.length) {
+            res.status(422).json({
+                error: 'Stripe Checkout Session create request did not match expectations',
+                mismatches,
+            });
+            return;
+        }
+
+        res.json(buildEmbeddedCheckoutSessionFixture(body, expectation.reply));
+    };
+};
+
 const collectCheckoutSessionCreateMismatches = (
     body: StripeFormBody,
     expectation: StripeCheckoutSessionCreateExpectation,
@@ -509,6 +557,37 @@ const collectCheckoutSessionCreateMismatches = (
     return mismatches;
 };
 
+const collectEmbeddedCheckoutSessionCreateMismatches = (
+    body: StripeFormBody,
+    expectation: StripeEmbeddedCheckoutSessionCreateExpectation,
+): string[] => {
+    const mismatches = collectCheckoutSessionCreateMismatches(body, {
+        match: {
+            ...expectation.match,
+            mode: 'subscription',
+        },
+    });
+
+    assertMatch(mismatches, 'ui_mode', getString(body, 'ui_mode'), 'embedded_page');
+    assertMatch(mismatches, 'return_url', getString(body, 'return_url'), expectation.match?.returnUrl);
+    assertMatch(
+        mismatches,
+        'redirect_on_completion',
+        getString(body, 'redirect_on_completion'),
+        expectation.match?.redirectOnCompletion,
+    );
+
+    if (getString(body, 'success_url') !== undefined) {
+        mismatches.push('Expected embedded Checkout request to omit success_url');
+    }
+
+    if (getString(body, 'cancel_url') !== undefined) {
+        mismatches.push('Expected embedded Checkout request to omit cancel_url');
+    }
+
+    return mismatches;
+};
+
 const assertMatch = <T extends string | number | boolean>(
     mismatches: string[],
     field: string,
@@ -541,19 +620,41 @@ const buildCheckoutSessionFixture = (
         id,
         object: 'checkout.session',
         mode: 'subscription',
+        ui_mode: 'hosted_page',
         status: 'open',
         payment_status: 'unpaid',
         customer: getString(body, 'customer') || 'cus_fullcircle_123',
         subscription: null,
+        client_secret: null,
         client_reference_id: getString(body, 'client_reference_id') || null,
         metadata,
+        return_url: null,
         success_url: getString(body, 'success_url') || null,
         cancel_url: getString(body, 'cancel_url') || null,
         allow_promotion_codes: getBoolean(body, 'allow_promotion_codes') ?? null,
+        redirect_on_completion: null,
         url: `http://localhost:7331/stripe/checkout/${id}`,
         livemode: false,
         ...reply,
     };
+};
+
+const buildEmbeddedCheckoutSessionFixture = (
+    body: StripeFormBody,
+    reply: Partial<StripeCheckoutSessionFixture> = {},
+): StripeCheckoutSessionFixture => {
+    const id = reply.id || 'cs_test_fullcircle_embedded_123';
+    return buildCheckoutSessionFixture(body, {
+        ...reply,
+        id,
+        ui_mode: 'embedded_page',
+        client_secret: reply.client_secret || `${id}_secret_fullcircle`,
+        return_url: getString(body, 'return_url') || null,
+        success_url: null,
+        cancel_url: null,
+        redirect_on_completion: getRedirectOnCompletion(body),
+        url: null,
+    });
 };
 
 const normalizeStripeFormBody = (body: unknown): StripeFormBody => {
@@ -598,6 +699,11 @@ const getBoolean = (body: StripeFormBody, key: string): boolean | undefined => {
     }
 
     return undefined;
+};
+
+const getRedirectOnCompletion = (body: StripeFormBody): 'always' | 'if_required' | null => {
+    const value = getString(body, 'redirect_on_completion');
+    return value === 'always' || value === 'if_required' ? value : null;
 };
 
 const collectMetadata = (body: StripeFormBody, prefix: string): Record<string, string> => {
