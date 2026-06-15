@@ -11,3 +11,4 @@ export * from './providers/supabase';
 export * from './providers/hetzner';
 export * from './providers/cloudflare';
 export * from './providers/openrouter';
+export * from './providers/autumn';
