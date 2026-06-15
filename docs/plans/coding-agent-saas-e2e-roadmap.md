@@ -79,6 +79,8 @@ Implement provider APIs here first, with TDD around request matching and fixture
 
 ### Layer 3: app-repo acceptance tests with FullCircle
 
+Concrete suite definitions live in [`app-repo-fullcircle-acceptance-suites.md`](./app-repo-fullcircle-acceptance-suites.md).
+
 Run real app/service code with dependency base URLs pointed to FullCircle. Assert:
 
 - external request sequence;
