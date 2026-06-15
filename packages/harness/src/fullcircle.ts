@@ -165,3 +165,30 @@ export const fullcircle = async (options: FullCircleOptions) => {
     await fc.initialize();
     return fc;
 }
+
+export const withFullCircle = async <T>(
+    options: FullCircleOptions,
+    callback: (fc: FullCircleInstance) => Promise<T> | T,
+): Promise<T> => {
+    const fc = await fullcircle(options);
+    try {
+        return await callback(fc);
+    } finally {
+        await fc.close();
+    }
+};
+
+export const withHarness = async <T>(
+    fc: FullCircleInstance,
+    originalHost: string,
+    callback: (harness: TestHarness) => Promise<T> | T,
+): Promise<T> => {
+    const harness = fc.harness(originalHost);
+    try {
+        const result = await callback(harness);
+        await harness.verify();
+        return result;
+    } finally {
+        await harness.close({verify: false});
+    }
+};

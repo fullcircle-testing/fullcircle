@@ -30,6 +30,8 @@ export class TestHarness {
     private actualRequests: ActualRequestLog[] = [];
     private fc: FullCircleInstance;
     private originalHost: string;
+    private closed = false;
+    private verified = false;
 
     constructor(fc: FullCircleInstance, originalHost: string) {
         this.fc = fc;
@@ -114,7 +116,7 @@ export class TestHarness {
         }
     }
 
-    private runAssertions = async () => {
+    verify = async () => {
         const messages: string[] = [];
         const errors: string[] = [];
 
@@ -140,6 +142,8 @@ export class TestHarness {
                 : [`No actual requests received by ${this.originalHost}.`];
             throw new Error(`harness assertions failed:\n${[...errors, ...actualRequests].join('\n')}`);
         }
+
+        this.verified = true;
     }
 
     mock = (path: string, handler: express.Handler, options: FullCircleExpectationOptions = {}) => {
@@ -162,10 +166,22 @@ export class TestHarness {
         this.registeredPassthroughs.push(createExpectation(path, handler, options));
     }
 
-    [Symbol.asyncDispose] = async () => {
+    close = async (options: {verify?: boolean} = {}) => {
+        if (this.closed) {
+            return;
+        }
+
         this.fc.unsubscribeToRequests(this.onRequest);
-        await this.runAssertions();
+        this.closed = true;
+
+        if (options.verify === false || this.verified) {
+            return;
+        }
+
+        await this.verify();
     }
+
+    [Symbol.asyncDispose] = this.close;
 }
 
 const createExpectation = (

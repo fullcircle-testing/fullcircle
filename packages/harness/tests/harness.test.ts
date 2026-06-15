@@ -3,7 +3,7 @@
 import request from 'supertest';
 import fetch from 'node-fetch';
 
-import {fullcircle} from '../src/fullcircle';
+import {fullcircle, withFullCircle, withHarness} from '../src/fullcircle';
 import {response} from '../src/primitives';
 
 describe('Harness tests', () => {
@@ -460,6 +460,72 @@ describe('Harness tests', () => {
 
             expect(response.body).toEqual({data: 'My passthrough data'});
         }
+    });
+
+    it('harness.verify and close provide explicit lifecycle without await using', async () => {
+        const fc = await fullcircle({
+            listenAddress: null,
+        });
+        const th = fc.harness('api.github.com');
+
+        try {
+            th.mock('/api/repos', (req, res) => {
+                res.json({data: 'explicit lifecycle'});
+            });
+
+            const response = await request(fc.expressApp)
+                .get('/api/repos')
+                .set('original_host', 'api.github.com')
+                .expect(200);
+            expect(response.body).toEqual({data: 'explicit lifecycle'});
+
+            await th.verify();
+        } finally {
+            await th.close();
+            await fc.close();
+        }
+
+        await request(fc.expressApp)
+            .get('/api/repos')
+            .set('original_host', 'api.github.com')
+            .expect(404);
+    });
+
+    it('harness.close verifies by default while still unsubscribing on failure', async () => {
+        await using fc = await fullcircle({
+            listenAddress: null,
+        });
+        const th = fc.harness('api.github.com');
+        th.mock('/api/repos', (req, res) => {
+            res.json({data: 'never called'});
+        });
+
+        await expect(th.close()).rejects.toThrow('Did not receive request to mock for /api/repos');
+
+        await request(fc.expressApp)
+            .get('/api/repos')
+            .set('original_host', 'api.github.com')
+            .expect(404);
+
+        await expect(th.close()).resolves.toBeUndefined();
+    });
+
+    it('withFullCircle and withHarness close resources after callback success', async () => {
+        const result = await withFullCircle({listenAddress: null}, async fc => {
+            return withHarness(fc, 'api.github.com', async th => {
+                th.mock('/api/repos', (req, res) => {
+                    res.json({data: 'with helpers'});
+                });
+
+                const response = await request(fc.expressApp)
+                    .get('/api/repos')
+                    .set('original_host', 'api.github.com')
+                    .expect(200);
+                return response.body.data;
+            });
+        });
+
+        expect(result).toBe('with helpers');
     });
 
 });
