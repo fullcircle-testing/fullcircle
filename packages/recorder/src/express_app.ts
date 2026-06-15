@@ -1,6 +1,7 @@
 import express from 'express';
 
 import {initFullCircleApiRouter} from './controllers/fullcircle_api_controller';
+import {initFullCircleUiRouter} from './controllers/fullcircle_ui_controller';
 
 import {initProxyRouter} from './controllers/proxy_controller';
 
@@ -12,6 +13,7 @@ export const initApp = (deps: AppDependencies) => {
     app.use(express.json());
 
     app.use('/fullcircle/api', initFullCircleApiRouter(deps));
+    app.use('/fullcircle', initFullCircleUiRouter());
 
     app.use(initProxyRouter(deps));
 

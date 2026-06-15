@@ -2,21 +2,32 @@ import fs from 'node:fs/promises';
 
 import {RecordedCall} from '../types';
 
-type HttpRequestSummary = {
+export type HttpRequestSummary = {
     host: string;
     path: string;
     method: string;
     time: string;
-    filename: string;
+    filename?: string;
 };
 
-type SessionSummary = {
+export type SessionSummary = {
     sessionName: string;
     startTime: string;
     endTime: string;
     numCalls: number;
     calls: HttpRequestSummary[];
 }
+
+export type FinishedSessionResult = SessionSummary & {
+    outputPath?: string;
+    message: string;
+};
+
+export type RecordingSessionStatus = {
+    startedAt: string;
+    callCount: number;
+    recentCalls: HttpRequestSummary[];
+};
 
 export class RecordingSession {
     private startTime: Date = new Date();
@@ -27,9 +38,28 @@ export class RecordingSession {
         // this.logRecordedCalls('');
     }
 
-    logRecordedCalls = async (sessionName: string): Promise<string> => {
+    getStatus = (): RecordingSessionStatus => ({
+        startedAt: this.startTime.toISOString(),
+        callCount: this.recordedCalls.length,
+        recentCalls: this.recordedCalls.slice(-20).map(call => ({
+            host: call.host,
+            path: call.requestPath,
+            method: call.requestMethod,
+            time: call.time,
+        })),
+    });
+
+    finish = async (sessionName: string): Promise<FinishedSessionResult> => {
         if (!this.recordedCalls.length) {
-            return 'No calls have been made during this session';
+            const endTime = new Date().toISOString();
+            return {
+                sessionName,
+                startTime: this.startTime.toISOString(),
+                endTime,
+                numCalls: 0,
+                calls: [],
+                message: 'No calls have been made during this session',
+            };
         }
 
         const startTime = this.startTime.toISOString().replaceAll(':', '-').substring(0, 19);
@@ -91,7 +121,16 @@ export class RecordingSession {
 
         await fs.writeFile(withTopFolder('summary.json'), JSON.stringify(summary, null, 2));
 
-        const message = `Finished session "${sessionName}"\nRecorded ${this.recordedCalls.length} calls\nStart ${this.startTime.toISOString()} End ${endTime}`;
-        return message;
+        const message = `Finished session "${sessionName}"\nRecorded ${this.recordedCalls.length} calls\nStart ${this.startTime.toISOString()} End ${endTime}\nOutput ${topFolderName}`;
+        return {
+            ...summary,
+            outputPath: topFolderName,
+            message,
+        };
+    }
+
+    logRecordedCalls = async (sessionName: string): Promise<string> => {
+        const result = await this.finish(sessionName);
+        return result.message;
     }
 }

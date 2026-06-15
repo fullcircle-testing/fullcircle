@@ -7,14 +7,25 @@ type Deps = {sessionManager: SessionManager};
 export const initFullCircleApiRouter = ({sessionManager}: Deps) => {
     const fullcircleApiRouter = express.Router();
 
+    fullcircleApiRouter.get('/status', async (req, res) => {
+        res.json(sessionManager.getStatus());
+    });
+
     fullcircleApiRouter.post('/record/start', async (req, res) => {
         sessionManager.startNewSession();
-        res.send('Started recording');
+        res.json({
+            message: 'Started recording',
+            ...sessionManager.getStatus(),
+        });
     });
 
     fullcircleApiRouter.post('/record/stop', async (req, res) => {
-        const message = await sessionManager.finishCurrentSession('');
-        res.send(message);
+        const result = await sessionManager.finishCurrentSessionDetails(req.body?.name || '');
+        res.json({
+            message: result?.message,
+            result,
+            ...sessionManager.getStatus(),
+        });
     });
 
     return fullcircleApiRouter;

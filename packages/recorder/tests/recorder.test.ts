@@ -94,4 +94,104 @@ describe('Test proxy', () => {
 
         expect(sessionManager.getCurrentSession()).toBeUndefined();
     });
+
+    it('exposes recorder session status and stop controls through API', async () => {
+        const testBody = {ok: true};
+        server.get('/session-ui-user').mockImplementationOnce((ctx) => {
+            ctx.body = testBody;
+            ctx.status = 200;
+        });
+
+        const url = server.getURL();
+        const destination = url.toString().replace(/\/$/, '');
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: false,
+                currentSession: null,
+                recentCalls: [],
+                lastFinishedSession: null,
+            }));
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: true,
+                message: 'Started recording',
+            }));
+
+        await request(app)
+            .get('/session-ui-user')
+            .expect(200);
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: true,
+                currentSession: {
+                    callCount: 1,
+                    recentCalls: [{
+                        host: destination,
+                        path: '/session-ui-user',
+                        method: 'GET',
+                    }],
+                },
+                recentCalls: [{
+                    host: destination,
+                    path: '/session-ui-user',
+                    method: 'GET',
+                }],
+            }));
+
+        await request(app)
+            .post('/fullcircle/api/record/stop')
+            .send({name: 'ui session'})
+            .expect(200)
+            .expect(response => {
+                expect(response.body).toMatchObject({
+                    recording: false,
+                    result: {
+                        sessionName: 'ui session',
+                        numCalls: 1,
+                        outputPath: expect.any(String),
+                    },
+                    message: expect.stringContaining('Finished session "ui session"'),
+                });
+            });
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: false,
+                currentSession: null,
+                lastFinishedSession: {
+                    sessionName: 'ui session',
+                    numCalls: 1,
+                    outputPath: expect.any(String),
+                },
+            }));
+    });
+
+    it('serves a recorder session management web UI', async () => {
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, includeHeaders: false});
+
+        await request(app)
+            .get('/fullcircle')
+            .expect(200)
+            .expect('content-type', /html/)
+            .expect(response => {
+                expect(response.text).toContain('FullCircle Recorder');
+                expect(response.text).toContain('Start recording');
+                expect(response.text).toContain('Stop and save');
+                expect(response.text).toContain('/fullcircle/api/status');
+            });
+    });
 });
