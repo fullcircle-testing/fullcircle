@@ -347,6 +347,8 @@ Estimated fixtures:
 
 ## Suggested Soundspace acceptance journeys
 
+Detailed fixture envelopes and expected DB/request assertions live in [`soundspace-acceptance-fixtures.md`](./soundspace-acceptance-fixtures.md). The summary below stays as the case-study roadmap.
+
 ### A. New user completes checkout subscription
 
 1. Seed local DB with a Soundspace plan and products generated from `stripe.resources.subscriptionPlan()`.
