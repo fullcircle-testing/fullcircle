@@ -52,6 +52,7 @@ For future billing/AI limits, this app should introduce small gateway modules be
 - `OpenRouterGateway`: base URL, API key, completion/generation stats calls.
 - `AutumnGateway`: base URL, secret key, customer get/create, check, track/token-usage, billing attach/update/portal.
 - `AiUsageService`: single business seam that checks/reserves Autumn balance, calls OpenRouter/OpenCode, records/refunds usage, and persists audit rows.
+- `IssueTrackerGateway` plugin host: routes Jira, GitHub, Linear, and Trello integrations through common ticket/project primitives without hiding provider-specific IDs, webhook signatures, or rate-limit behavior.
 
 ## External API facts to model
 
@@ -60,6 +61,10 @@ For future billing/AI limits, this app should introduce small gateway modules be
 - OpenCode supports OpenRouter as a provider and allows custom provider `baseURL` in `opencode.json`, which gives tests a clean way to point OpenCode at FullCircle.
 - Autumn is a billing/entitlements system of record on top of Stripe. Its docs emphasize `check` for access, `track` for usage, and atomic check+track/reservation patterns for concurrent events. Current API reference uses v2-style RPC endpoints such as `POST /v1/billing.attach`, `POST /v1/billing.update`, `POST /v1/customers.list`, and balance endpoints including Check Permissions, Track Usage, Track Token Usage, Batch Track Usage, and Finalize Lock.
 - Hetzner Cloud API is REST under `https://api.hetzner.cloud/v1`; the control-plane code needs servers, volumes, and actions failure simulation.
+- GitHub issue/PR integrations should model both REST issue endpoints and pull request endpoints because GitHub's REST API treats pull requests as issues for some operations while separate PR endpoints are needed for PR-specific data.
+- Jira Cloud integrations should model REST API v3 issue/project/search endpoints plus dynamic/webhook registration and delivery behavior.
+- Linear integrations should model GraphQL queries/mutations at `https://api.linear.app/graphql` and webhook delivery for entity create/update events.
+- Trello integrations should model REST cards/lists/boards plus webhook creation/delivery; Trello webhook setup validates callback URLs, so tests need to handle registration-time verification behavior.
 
 ## Proposed test pyramid
 
@@ -251,6 +256,49 @@ aiUsageScenario({
 
 This should register both Autumn and OpenRouter mocks and expose expected ledger diffs so tests cannot drift between usage and billing fixtures.
 
+### 7. Issue tracker and source-host plugin providers
+
+The app plugin roadmap should treat Jira, GitHub, Linear, and Trello as first-class external systems, not as one-off workflow mocks. FullCircle should provide provider primitives plus a small cross-provider fixture vocabulary.
+
+Common plugin contract:
+
+```ts
+const trackers = issueTrackerScenario({
+  customerId: 'cust_acme',
+  repo: 'acme/web',
+  task: { title: 'Fix CI failure', externalId: 'ENG-123' },
+});
+
+trackers.github.issues.get({ owner: 'acme', repo: 'web', issueNumber: 123, reply: githubIssue });
+trackers.linear.issues.create({ match: { teamKey: 'ENG', titleIncludes: 'Fix CI failure' }, reply: linearIssue });
+trackers.jira.issues.transition({ issueKey: 'ENG-123', match: { status: 'In Progress' }, reply: jiraTransition });
+trackers.trello.cards.move({ cardId: 'card_123', match: { listId: 'doing' }, reply: trelloCard });
+```
+
+Provider-specific starting surface:
+
+- **GitHub provider**: issues, pull requests, review comments, commit statuses/check runs, repository dispatch, app installation token exchange, and signed webhook delivery. Reuse the existing GitHub workflow tests in `vibe-kanban-vscode-web` as the first acceptance target.
+- **Jira provider**: project lookup, issue search by JQL, issue create/update/comment/transition, user/account lookup, dynamic webhook registration, and signed or shared-secret webhook delivery depending on app mode.
+- **Linear provider**: GraphQL operation matching by `operationName` plus semantic variables, issue/team/project mutations, comments, workflow-state changes, OAuth/API-key auth variants, and webhook delivery.
+- **Trello provider**: board/list/card CRUD, comments/actions, member lookup, card movement, webhook create/list/delete, and registration callback verification.
+
+Cross-provider test scenarios:
+
+1. link a coding-agent task to an external ticket and persist provider IDs;
+2. create/update external ticket when an agent starts, blocks, opens a PR, or completes;
+3. ingest webhook updates from the tracker and update app task state idempotently;
+4. post an agent summary/comment back to the provider;
+5. handle OAuth expiration, 401/403 permission errors, 404 deleted tickets, 409/conflict races, and 429 rate limits;
+6. verify per-customer plugin enablement and billing limits: disabled plugin means no outbound provider call; insufficient Autumn entitlement blocks new sync work before provider calls.
+
+Implementation notes:
+
+- Keep a common `ExternalWorkItem` shape in app code, but retain raw provider payload snapshots for debugging and migrations.
+- Match GraphQL providers by operation name and variables, not raw query string formatting.
+- Use FullCircle outbound webhook delivery helpers for provider-to-app events, just like the Stripe provider.
+- Add a small plugin conformance suite so every provider proves create/link/comment/transition/webhook/idempotency semantics.
+- Build GitHub first because `vibe-kanban-vscode-web` already has GitHub webhook/workflow code, then Linear, Jira, and Trello.
+
 ## App-repo implementation sequence
 
 1. Add gateways/seams in `vibe-kanban-vscode-web` before feature code:
@@ -263,11 +311,16 @@ This should register both Autumn and OpenRouter mocks and expose expected ledger
    - start agent task -> Autumn check/reserve -> OpenCode/OpenRouter -> Autumn confirm/track -> DB audit;
    - insufficient balance -> no OpenRouter request;
    - OpenRouter 429/5xx -> release/refund usage and show retryable state.
-4. In `hetzner-saas`, add FullCircle-backed acceptance tests around the active control plane branch:
+4. Add plugin gateway seams and conformance tests in `vibe-kanban-vscode-web`:
+   - common plugin installation/auth storage model;
+   - GitHub provider first using existing webhook/workflow code;
+   - Linear/Jira/Trello providers behind the same `ExternalWorkItem` contract;
+   - plugin entitlement checks through Autumn before starting paid or rate-limited sync jobs.
+5. In `hetzner-saas`, add FullCircle-backed acceptance tests around the active control plane branch:
    - first with direct `PulumiCliRunner` methods that already call fetch;
    - then full worker/executor HTTP flow with D1 shim snapshots;
    - keep real Hetzner smoke tests gated.
-5. Add CI jobs that run FullCircle provider contract tests and app acceptance tests, but not real provider tests.
+6. Add CI jobs that run FullCircle provider contract tests and app acceptance tests, but not real provider tests.
 
 ## Discussion questions
 
@@ -275,3 +328,4 @@ This should register both Autumn and OpenRouter mocks and expose expected ledger
 2. For Autumn outages, should AI generation fail closed or allow temporary use? Recommendation: fail closed before starting paid OpenRouter work; queue reconciliation only after OpenRouter has already succeeded.
 3. Should token limits be enforced by required balance estimate before generation or by final actual usage? Recommendation: reserve a conservative estimate, then finalize/refund using actual OpenRouter usage/generation stats.
 4. Should OpenCode tests be true E2E or provider-level only at first? Recommendation: one tiny true OpenCode fixture test early to validate config/baseURL/auth isolation, then keep most cases at the gateway/service layer.
+5. Should issue tracker plugins share one normalized app model or expose provider-native concepts directly? Recommendation: normalized `ExternalWorkItem` for app workflows, provider-native IDs/payloads retained for debugging, migrations, and advanced plugin behavior.
