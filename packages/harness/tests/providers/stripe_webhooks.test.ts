@@ -3,18 +3,21 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 
-import express from 'express';
-
 import {fullcircle} from '../../src/fullcircle';
 import {stripeProvider} from '../../src/providers/stripe';
 
-const readRawBody = (req: express.Request): Promise<Buffer> => {
+const readRawBody = (req: http.IncomingMessage): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
         req.on('data', chunk => chunks.push(Buffer.from(chunk)));
         req.on('end', () => resolve(Buffer.concat(chunks)));
         req.on('error', reject);
     });
+};
+
+const header = (req: http.IncomingMessage, name: string): string | undefined => {
+    const value = req.headers[name.toLowerCase()];
+    return Array.isArray(value) ? value[0] : value;
 };
 
 const verifyStripeSignature = (payload: Buffer, signatureHeader: string | undefined, secret: string) => {
@@ -44,20 +47,25 @@ describe('Stripe provider webhooks', () => {
 
     beforeEach(async () => {
         receivedEvents = [];
-        const app = express();
-        app.post('/stripe/webhook', async (req, res) => {
-            const rawBody = await readRawBody(req);
-            const signature = req.header('stripe-signature');
-            receivedEvents.push({
-                body: JSON.parse(rawBody.toString('utf8')),
-                signature,
-                signatureValid: verifyStripeSignature(rawBody, signature, 'whsec_fullcircle_test_secret'),
-            });
-            res.status(204).end();
-        });
-
         server = await new Promise<http.Server>(resolve => {
-            const listener = app.listen(0, () => resolve(listener));
+            const listener = http.createServer(async (req, res) => {
+                if (req.method !== 'POST' || req.url !== '/stripe/webhook') {
+                    res.statusCode = 404;
+                    res.end();
+                    return;
+                }
+
+                const rawBody = await readRawBody(req);
+                const signature = header(req, 'stripe-signature');
+                receivedEvents.push({
+                    body: JSON.parse(rawBody.toString('utf8')),
+                    signature,
+                    signatureValid: verifyStripeSignature(rawBody, signature, 'whsec_fullcircle_test_secret'),
+                });
+                res.statusCode = 204;
+                res.end();
+            });
+            listener.listen(0, () => resolve(listener));
         });
         const address = server.address();
         if (!address || typeof address === 'string') {

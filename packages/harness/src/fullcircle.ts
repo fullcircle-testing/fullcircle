@@ -1,17 +1,15 @@
 import {Server} from 'http';
 
-import express from 'express';
-require('express-async-errors');
+import {AppRequest, AppResponse, createMiniApp, Handler, MiniApp, NextFunction} from './mini_http';
 
 import {TestHarness} from './harness';
 
-type ReplaceReturnType<T extends (...a: any) => any, TNewReturn> = (...a: Parameters<T>) => TNewReturn;
-
-export type SubscriptionFunc = ReplaceReturnType<express.Handler, Promise<boolean>>;
+export type SubscriptionFunc = (req: AppRequest, res: AppResponse, next: NextFunction) => Promise<boolean>;
 
 export type FullCircleOptions = {
     listenAddress: string | number | null;
     defaultDestination?: string;
+    host?: string;
 };
 
 export class FullCircleInstance {
@@ -19,11 +17,11 @@ export class FullCircleInstance {
     private boundPort?: number;
     private boundUrl?: string;
 
-    public expressApp: express.Express;
+    public expressApp: MiniApp;
     private server?: Server;
 
     constructor(public options: FullCircleOptions) {
-        this.expressApp = express();
+        this.expressApp = createMiniApp();
     }
 
     get port(): number {
@@ -43,8 +41,6 @@ export class FullCircleInstance {
     }
 
     initialize = async () => {
-        this.expressApp.use(express.urlencoded({extended: false}));
-        this.expressApp.use(express.json());
         this.expressApp.use(this.initializeSubscriptionRouter());
         this.expressApp.use(this.initializeNotFoundRouter());
 
@@ -55,6 +51,7 @@ export class FullCircleInstance {
         }
 
         const normalizedListenAddress = normalizeListenAddress(listenAddress);
+        const host = this.options.host ?? '127.0.0.1';
 
         return new Promise<void>((resolve, reject) => {
             const onError = (error: Error) => {
@@ -70,7 +67,7 @@ export class FullCircleInstance {
                 resolve();
             };
 
-            this.server = this.expressApp.listen(normalizedListenAddress);
+            this.server = this.expressApp.listen(normalizedListenAddress, host);
             this.server.once('error', onError);
             this.server.once('listening', onListening);
         });
@@ -83,12 +80,11 @@ export class FullCircleInstance {
         }
 
         this.boundPort = address.port;
-        this.boundUrl = `http://127.0.0.1:${address.port}`;
+        this.boundUrl = `http://${this.options.host ?? '127.0.0.1'}:${address.port}`;
     }
 
-    private initializeSubscriptionRouter = (): express.Router => {
-        const router = express.Router();
-        router.use(async (req, res, next) => {
+    private initializeSubscriptionRouter = (): Handler => {
+        return async (req, res, next) => {
             for (const sub of this.subscriptions) {
                 if (await sub(req, res, next)) {
                     return;
@@ -96,21 +92,16 @@ export class FullCircleInstance {
             }
 
             next();
-        });
-
-        return router;
+        };
     };
 
-    private initializeNotFoundRouter = (): express.Router => {
-        const router = express.Router();
-        router.use(async (req, res, next) => {
+    private initializeNotFoundRouter = (): Handler => {
+        return async (req, res, next) => {
             const errMsg = `FC server received unexpected request. No registered mocks for ${req.originalUrl}`;
 
             res.statusCode = 404;
             res.json({error: errMsg});
-        });
-
-        return router;
+        };
     };
 
     subscribeToRequests = (handler: SubscriptionFunc) => {

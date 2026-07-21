@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import type express from 'express';
+import type {Handler} from '../mini_http';
 
 import type {TestHarness} from '../harness';
 
@@ -389,7 +389,7 @@ const makeStripeExpectationHandler = (input: {
     defaultId: string;
     bodySource: 'body' | 'query';
     listPath?: string;
-}): express.Handler => (req, res) => {
+}): Handler => (req, res) => {
     if (req.method !== input.method) {
         res.status(405).json({error: `Expected ${input.method} for Stripe ${input.objectType}`});
         return;
@@ -464,7 +464,7 @@ const stringValues = (values: StripeFormBody): Record<string, string> => {
     return result;
 };
 
-const makeCheckoutSessionCreateHandler = (expectation: StripeCheckoutSessionCreateExpectation): express.Handler => {
+const makeCheckoutSessionCreateHandler = (expectation: StripeCheckoutSessionCreateExpectation): Handler => {
     return (req, res) => {
         if (req.method !== 'POST') {
             res.status(405).json({error: 'Expected POST for Stripe Checkout Session create'});
@@ -488,7 +488,7 @@ const makeCheckoutSessionCreateHandler = (expectation: StripeCheckoutSessionCrea
 
 const makeEmbeddedCheckoutSessionCreateHandler = (
     expectation: StripeEmbeddedCheckoutSessionCreateExpectation,
-): express.Handler => {
+): Handler => {
     return (req, res) => {
         if (req.method !== 'POST') {
             res.status(405).json({error: 'Expected POST for Stripe embedded Checkout Session create'});

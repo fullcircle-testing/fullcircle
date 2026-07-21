@@ -3,7 +3,6 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import Database from 'better-sqlite3';
-import express from 'express';
 import fetch from 'node-fetch';
 import request from 'supertest';
 
@@ -13,7 +12,7 @@ import {stripeProvider} from '../../src/providers/stripe';
 
 const STRIPE_WEBHOOK_SECRET = 'whsec_fullcircle_test_secret';
 
-const readRawBody = (req: express.Request): Promise<Buffer> => new Promise((resolve, reject) => {
+const readRawBody = (req: http.IncomingMessage): Promise<Buffer> => new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     req.on('data', chunk => chunks.push(Buffer.from(chunk)));
     req.on('end', () => resolve(Buffer.concat(chunks)));
@@ -63,13 +62,13 @@ const createDatabase = () => {
     return db;
 };
 
-const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) => {
-    const app = express();
+const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) => http.createServer(async (req, res) => {
+    const url = new URL(req.url || '/', 'http://billing.local');
 
-    app.post('/stripe/webhook', async (req, res) => {
+    if (req.method === 'POST' && url.pathname === '/stripe/webhook') {
         const rawBody = await readRawBody(req);
-        if (!verifyStripeSignature(rawBody, req.header('stripe-signature'))) {
-            res.status(400).json({error: 'invalid stripe signature'});
+        if (!verifyStripeSignature(rawBody, header(req, 'stripe-signature'))) {
+            sendJson(res, 400, {error: 'invalid stripe signature'});
             return;
         }
 
@@ -80,7 +79,8 @@ const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) =
         const insertEvent = input.db.prepare('INSERT OR IGNORE INTO processed_webhook_events (event_id, provider, type) VALUES (?, ?, ?)');
         const eventResult = insertEvent.run(event.id, 'stripe', event.type);
         if (eventResult.changes === 0) {
-            res.status(204).end();
+            res.statusCode = 204;
+            res.end();
             return;
         }
 
@@ -91,25 +91,29 @@ const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) =
             `).run(userId, 'stripe', session.customer, session.subscription, 'active');
         }
 
-        res.status(204).end();
-    });
+        res.statusCode = 204;
+        res.end();
+        return;
+    }
 
-    app.use(express.json());
-
-    app.post('/api/test/login', (req, res) => {
+    if (req.method === 'POST' && url.pathname === '/api/test/login') {
         input.db.prepare('INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)')
             .run('user_test_123', 'customer@example.com');
-        res.json({id: 'user_test_123', email: 'customer@example.com'});
-    });
+        sendJson(res, 200, {id: 'user_test_123', email: 'customer@example.com'});
+        return;
+    }
 
-    app.get('/billing', (req, res) => {
+    if (req.method === 'GET' && url.pathname === '/billing') {
         const subscription = input.db.prepare('SELECT * FROM subscriptions WHERE user_id = ? AND status = ?')
             .get('user_test_123', 'active');
         const plan = subscription ? 'Pro' : 'Free';
-        res.type('html').send(`<h1>Billing</h1><p>Current plan: ${plan}</p><button>Upgrade to Pro</button>`);
-    });
+        res.statusCode = 200;
+        res.setHeader('content-type', 'text/html; charset=utf-8');
+        res.end(`<h1>Billing</h1><p>Current plan: ${plan}</p><button>Upgrade to Pro</button>`);
+        return;
+    }
 
-    app.post('/api/billing/checkout', async (req, res) => {
+    if (req.method === 'POST' && url.pathname === '/api/billing/checkout') {
         const stripeResponse = await fetch(`${input.stripeBaseUrl}/v1/checkout/sessions`, {
             method: 'POST',
             headers: {
@@ -128,10 +132,23 @@ const initBillingApp = (input: {db: Database.Database; stripeBaseUrl: string}) =
             }).toString(),
         });
 
-        res.status(stripeResponse.status).json(await stripeResponse.json());
-    });
+        sendJson(res, stripeResponse.status, await stripeResponse.json());
+        return;
+    }
 
-    return app;
+    res.statusCode = 404;
+    res.end();
+});
+
+const header = (req: http.IncomingMessage, name: string): string | undefined => {
+    const value = req.headers[name.toLowerCase()];
+    return Array.isArray(value) ? value[0] : value;
+};
+
+const sendJson = (res: http.ServerResponse, status: number, body: unknown) => {
+    res.statusCode = status;
+    res.setHeader('content-type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify(body));
 };
 
 describe('Stripe Checkout subscription dogfood acceptance', () => {
@@ -164,7 +181,7 @@ describe('Stripe Checkout subscription dogfood acceptance', () => {
             stripeBaseUrl: fc.url,
         });
         const appServer = await new Promise<http.Server>(resolve => {
-            const listener = app.listen(0, () => resolve(listener));
+            app.listen(0, () => resolve(app));
         });
         const testDb = sqliteDatabase(db);
 

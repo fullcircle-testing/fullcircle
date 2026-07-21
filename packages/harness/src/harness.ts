@@ -1,6 +1,6 @@
-import express from 'express';
+import type {AppRequest, AppResponse, Handler, NextFunction} from './mini_http';
 import type {FullCircleInstance, SubscriptionFunc} from './fullcircle';
-import {fullCircleHandlerToExpress, toFullCircleRequest} from './express_adapter';
+import {fullCircleHandlerToExpress, toFullCircleRequest} from './http_adapter';
 import type {
     FullCircleBody,
     FullCircleExpectationOptions,
@@ -13,7 +13,7 @@ import {matchesRoute, routeMatcherToString} from './route_matcher';
 
 type PathHandlerClump = {
     matcher: FullCircleRouteMatcher;
-    handler: express.Handler;
+    handler: Handler;
     options: Required<Pick<FullCircleExpectationOptions, 'times'>> & Pick<FullCircleExpectationOptions, 'name'>;
     callCount: number;
 }
@@ -103,9 +103,9 @@ export class TestHarness {
 
     private invokeExpectation = async (
         expectation: PathHandlerClump,
-        req: express.Request,
-        res: express.Response,
-        next: express.NextFunction,
+        req: AppRequest,
+        res: AppResponse,
+        next: NextFunction,
     ) => {
         expectation.callCount += 1;
         try {
@@ -146,7 +146,7 @@ export class TestHarness {
         this.verified = true;
     }
 
-    mock = (path: string, handler: express.Handler, options: FullCircleExpectationOptions = {}) => {
+    mock = (path: string, handler: Handler, options: FullCircleExpectationOptions = {}) => {
         this.registeredMocks.push(createExpectation(path, handler, options));
     }
 
@@ -162,7 +162,7 @@ export class TestHarness {
         ));
     }
 
-    passthrough = (path: string, handler: express.Handler, options: FullCircleExpectationOptions = {}) => {
+    passthrough = (path: string, handler: Handler, options: FullCircleExpectationOptions = {}) => {
         this.registeredPassthroughs.push(createExpectation(path, handler, options));
     }
 
@@ -186,7 +186,7 @@ export class TestHarness {
 
 const createExpectation = (
     matcher: FullCircleRouteMatcher,
-    handler: express.Handler,
+    handler: Handler,
     options: FullCircleExpectationOptions,
 ): PathHandlerClump => ({
     matcher,

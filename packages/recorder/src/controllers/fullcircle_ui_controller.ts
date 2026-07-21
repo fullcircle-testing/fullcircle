@@ -1,16 +1,4 @@
-import express from 'express';
-
-export const initFullCircleUiRouter = () => {
-    const router = express.Router();
-
-    router.get('/', (req, res) => {
-        res.type('html').send(recorderUiHtml);
-    });
-
-    return router;
-};
-
-const recorderUiHtml = `<!doctype html>
+export const recorderUiHtml = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">

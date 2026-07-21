@@ -8,6 +8,14 @@ import {response} from '../src/primitives';
 
 describe('Harness tests', () => {
 
+    it('binds dynamic TCP listeners to localhost by default and supports explicit host opt-in', async () => {
+        await using fc = await fullcircle({listenAddress: 0});
+        expect(fc.url).toBe(`http://127.0.0.1:${fc.port}`);
+
+        await using explicitFc = await fullcircle({listenAddress: 0, host: '0.0.0.0'});
+        expect(explicitFc.url).toBe(`http://0.0.0.0:${explicitFc.port}`);
+    });
+
     it('fullcircle - dynamic listenAddress 0 exposes the bound port and url', async () => {
         await using fc = await fullcircle({
             listenAddress: 0,

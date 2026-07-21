@@ -16,8 +16,15 @@ export class SessionManager {
     private currentSession?: RecordingSession;
     private lastFinishedSession: FinishedSessionResult | null = null;
 
-    startNewSession = () => {
+    startNewSession = async (): Promise<FinishedSessionResult | undefined> => {
+        const autoFinished = await this.finishCurrentSessionDetails(this.autoFinishedSessionName());
         this.currentSession = new RecordingSession();
+        return autoFinished;
+    }
+
+    private autoFinishedSessionName = (): string => {
+        const startedAt = this.currentSession?.getStatus().startedAt ?? new Date().toISOString();
+        return `auto-finished-${startedAt.replace(/[^0-9A-Za-z._-]+/g, '-')}`;
     }
 
     getCurrentSession = (): RecordingSession | undefined => {

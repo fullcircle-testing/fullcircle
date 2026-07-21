@@ -6,25 +6,24 @@
   "scripts": {
     "start": "npm run recorder",
     "recorder": "DATA_LOG_OUT_DIR=\"$PWD/data_logs\" npm start --prefix packages/recorder --",
-    "build": "tsup --entry.harness packages/harness/src/index.ts --entry.recorder packages/recorder/src/index.ts --entry.vite-plugin packages/recorder/src/vite_plugin.ts --format esm,cjs --dts",
+    "build": "tsup --entry.harness packages/harness/src/index.ts --entry.recorder packages/recorder/src/index.ts --entry.recorder-cli packages/recorder/src/cli.ts --entry.vite-plugin packages/recorder/src/vite_plugin.ts --format esm,cjs --dts && npm run build --workspace @fullcircle/harness && npm run build --workspace @fullcircle/recorder && node scripts/ensure-cli-executable.cjs dist/recorder-cli.js",
     "prepare": "npm run build",
     "test": "jest --runInBand && npm test --prefix example_app/server",
     "check-types": "npm run check-types --prefix packages/harness && npm run check-types --prefix packages/recorder && npm run tsc --prefix example_app/server && npm run check-types --prefix example_app/tests-e2e",
     "test:smoke:real-providers": "jest packages/harness/tests/providers/real_provider_smoke.test.ts --runInBand"
   },
   "bin": {
-    "fc-record": "./dist/recorder.js"
+    "fc-record": "./dist/recorder-cli.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "@types/express": "^4.17.21",
-    "@types/express-http-proxy": "^1.6.6",
     "@types/jest": "^29.5.8",
     "@types/node": "^20.9.2",
     "@types/node-fetch": "^2.6.9",
+    "@types/supertest": "^2.0.16",
     "better-sqlite3": "^12.10.0",
     "jest": "^29.7.0",
     "jest-mock-server": "^0.1.0",

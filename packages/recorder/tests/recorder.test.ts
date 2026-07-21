@@ -1,7 +1,7 @@
 import {MockServer} from 'jest-mock-server';
 import request from 'supertest';
 
-import {initApp} from '../src/express_app';
+import {initApp} from '../src/recorder_app';
 import {SessionManager} from '../src/session_recording/sessions_manager';
 
 describe('Test proxy', () => {
@@ -27,7 +27,7 @@ describe('Test proxy', () => {
         const url = server.getURL();
 
         const sessionManager = new SessionManager();
-        sessionManager.startNewSession();
+        await sessionManager.startNewSession();
         const app = initApp({sessionManager, includeHeaders: false});
 
         const response = await request(app)
@@ -65,7 +65,7 @@ describe('Test proxy', () => {
         const url = server.getURL();
 
         const sessionManager = new SessionManager();
-        sessionManager.startNewSession();
+        await sessionManager.startNewSession();
         const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
 
         const response = await request(app)
@@ -88,7 +88,7 @@ describe('Test proxy', () => {
 
     it('clears empty sessions after finishing', async () => {
         const sessionManager = new SessionManager();
-        sessionManager.startNewSession();
+        await sessionManager.startNewSession();
 
         await expect(sessionManager.finishCurrentSession('empty')).resolves.toEqual('No calls have been made during this session');
 
@@ -177,6 +177,52 @@ describe('Test proxy', () => {
                     outputPath: expect.any(String),
                 },
             }));
+    });
+
+    it('auto-finishes an active session before starting the next one without data loss', async () => {
+        const testBody = {ok: 'auto-finish'};
+        server.get('/auto-finish-user').mockImplementationOnce((ctx) => {
+            ctx.body = testBody;
+            ctx.status = 200;
+        });
+
+        const url = server.getURL();
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200);
+
+        await request(app)
+            .get('/auto-finish-user')
+            .expect(200);
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200)
+            .expect(response => {
+                expect(response.body.recording).toBe(true);
+                expect(response.body.autoFinished).toMatchObject({
+                    sessionName: expect.stringMatching(/^auto-finished-/),
+                    numCalls: 1,
+                    outputPath: expect.any(String),
+                });
+                expect(response.body.lastFinishedSession).toMatchObject({
+                    numCalls: 1,
+                    calls: [expect.objectContaining({path: '/auto-finish-user'})],
+                });
+                expect(response.body.currentSession.callCount).toBe(0);
+            });
+
+        await request(app)
+            .post('/fullcircle/api/record/stop')
+            .send({name: 'second session'})
+            .expect(200)
+            .expect(response => {
+                expect(response.body.recording).toBe(false);
+                expect(response.body.message).toBe('No calls have been made during this session');
+            });
     });
 
     it('serves a recorder session management web UI', async () => {

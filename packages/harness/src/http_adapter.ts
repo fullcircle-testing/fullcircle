@@ -1,4 +1,4 @@
-import type express from 'express';
+import type {AppRequest, AppResponse, Handler} from './mini_http';
 
 import type {
     FullCircleBody,
@@ -8,13 +8,13 @@ import type {
 } from './primitives';
 
 export const toFullCircleRequest = (
-    req: express.Request,
+    req: AppRequest,
     destination: string,
 ): FullCircleRequest => {
     const absoluteUrl = new URL(req.originalUrl, 'http://fullcircle.local');
 
     return {
-        method: req.method,
+        method: req.method || 'GET',
         url: req.originalUrl,
         path: req.path,
         query: absoluteUrl.searchParams,
@@ -27,7 +27,7 @@ export const toFullCircleRequest = (
 export const fullCircleHandlerToExpress = (
     handler: FullCircleHandler,
     destination: string,
-): express.Handler => async (req, res, next) => {
+): Handler => async (req, res, next) => {
     try {
         const fcResponse = await handler(toFullCircleRequest(req, destination));
         sendFullCircleResponse(res, fcResponse);
@@ -37,7 +37,7 @@ export const fullCircleHandlerToExpress = (
 };
 
 export const sendFullCircleResponse = (
-    res: express.Response,
+    res: AppResponse,
     fcResponse: FullCircleResponse,
 ) => {
     res.status(fcResponse.status ?? 200);
@@ -64,7 +64,7 @@ export const sendFullCircleResponse = (
     res.json(fcResponse.body);
 };
 
-const toHeaders = (headers: express.Request['headers']): Headers => {
+const toHeaders = (headers: AppRequest['headers']): Headers => {
     const result = new Headers();
     for (const [key, value] of Object.entries(headers)) {
         if (Array.isArray(value)) {
@@ -82,7 +82,7 @@ const toHeaders = (headers: express.Request['headers']): Headers => {
     return result;
 };
 
-const toFullCircleBody = (req: express.Request): FullCircleBody => {
+const toFullCircleBody = (req: AppRequest): FullCircleBody => {
     if (req.body === undefined || req.body === null || req.body === '') {
         return {kind: 'empty'};
     }
