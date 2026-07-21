@@ -1,7 +1,7 @@
 import {MockServer} from 'jest-mock-server';
 import request from 'supertest';
 
-import {initApp} from '../src/express_app';
+import {initApp} from '../src/recorder_app';
 import {SessionManager} from '../src/session_recording/sessions_manager';
 
 describe('Test proxy', () => {
@@ -27,7 +27,7 @@ describe('Test proxy', () => {
         const url = server.getURL();
 
         const sessionManager = new SessionManager();
-        sessionManager.startNewSession();
+        await sessionManager.startNewSession();
         const app = initApp({sessionManager, includeHeaders: false});
 
         const response = await request(app)
@@ -45,6 +45,8 @@ describe('Test proxy', () => {
         expect(lines?.length).toBeGreaterThan(2);
         expect(lines![0]!).toEqual('Finished session \"first session\"');
         expect(lines![1]!).toEqual('Recorded 1 calls');
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
+        await expect(sessionManager.finishCurrentSession('duplicate finish')).resolves.toBeUndefined();
     });
 
     it('Receives response defined by test. Use default destination', async () => {
@@ -63,7 +65,7 @@ describe('Test proxy', () => {
         const url = server.getURL();
 
         const sessionManager = new SessionManager();
-        sessionManager.startNewSession();
+        await sessionManager.startNewSession();
         const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
 
         const response = await request(app)
@@ -80,5 +82,216 @@ describe('Test proxy', () => {
         expect(lines?.length).toBeGreaterThan(2);
         expect(lines![0]!).toEqual('Finished session \"my session\"');
         expect(lines![1]!).toEqual('Recorded 1 calls');
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
+        await expect(sessionManager.finishCurrentSession('duplicate finish')).resolves.toBeUndefined();
+    });
+
+    it('clears empty sessions after finishing', async () => {
+        const sessionManager = new SessionManager();
+        await sessionManager.startNewSession();
+
+        await expect(sessionManager.finishCurrentSession('empty')).resolves.toEqual('No calls have been made during this session');
+
+        expect(sessionManager.getCurrentSession()).toBeUndefined();
+    });
+
+    it('exposes recorder session status and stop controls through API', async () => {
+        const testBody = {ok: true};
+        server.get('/session-ui-user').mockImplementationOnce((ctx) => {
+            ctx.body = testBody;
+            ctx.status = 200;
+        });
+
+        const url = server.getURL();
+        const destination = url.toString().replace(/\/$/, '');
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: false,
+                currentSession: null,
+                recentCalls: [],
+                lastFinishedSession: null,
+            }));
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: true,
+                message: 'Started recording',
+            }));
+
+        await request(app)
+            .get('/session-ui-user')
+            .expect(200);
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: true,
+                currentSession: {
+                    callCount: 1,
+                    recentCalls: [{
+                        host: destination,
+                        path: '/session-ui-user',
+                        method: 'GET',
+                    }],
+                },
+                recentCalls: [{
+                    host: destination,
+                    path: '/session-ui-user',
+                    method: 'GET',
+                }],
+            }));
+
+        await request(app)
+            .post('/fullcircle/api/record/stop')
+            .send({name: 'ui session'})
+            .expect(200)
+            .expect(response => {
+                expect(response.body).toMatchObject({
+                    recording: false,
+                    result: {
+                        sessionName: 'ui session',
+                        numCalls: 1,
+                        outputPath: expect.any(String),
+                    },
+                    message: expect.stringContaining('Finished session "ui session"'),
+                });
+            });
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body).toMatchObject({
+                recording: false,
+                currentSession: null,
+                lastFinishedSession: {
+                    sessionName: 'ui session',
+                    numCalls: 1,
+                    outputPath: expect.any(String),
+                },
+            }));
+    });
+
+    it('auto-finishes an active session before starting the next one without data loss', async () => {
+        const testBody = {ok: 'auto-finish'};
+        server.get('/auto-finish-user').mockImplementationOnce((ctx) => {
+            ctx.body = testBody;
+            ctx.status = 200;
+        });
+
+        const url = server.getURL();
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, defaultDestination: url.toString(), includeHeaders: false});
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200);
+
+        await request(app)
+            .get('/auto-finish-user')
+            .expect(200);
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200)
+            .expect(response => {
+                expect(response.body.recording).toBe(true);
+                expect(response.body.autoFinished).toMatchObject({
+                    sessionName: expect.stringMatching(/^auto-finished-/),
+                    numCalls: 1,
+                    outputPath: expect.any(String),
+                });
+                expect(response.body.lastFinishedSession).toMatchObject({
+                    numCalls: 1,
+                    calls: [expect.objectContaining({path: '/auto-finish-user'})],
+                });
+                expect(response.body.currentSession.callCount).toBe(0);
+            });
+
+        await request(app)
+            .post('/fullcircle/api/record/stop')
+            .send({name: 'second session'})
+            .expect(200)
+            .expect(response => {
+                expect(response.body.recording).toBe(false);
+                expect(response.body.message).toBe('No calls have been made during this session');
+            });
+    });
+
+    it('serves a recorder session management web UI', async () => {
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, includeHeaders: false});
+
+        await request(app)
+            .get('/fullcircle')
+            .expect(200)
+            .expect('content-type', /html/)
+            .expect(response => {
+                expect(response.text).toContain('FullCircle Recorder');
+                expect(response.text).toContain('Start recording');
+                expect(response.text).toContain('Stop and save');
+                expect(response.text).toContain('/fullcircle/api/status');
+            });
+    });
+
+    it('records browser interaction events and writes them to the session artifact', async () => {
+        const sessionManager = new SessionManager();
+        const app = initApp({sessionManager, includeHeaders: false});
+
+        await request(app)
+            .post('/fullcircle/api/record/start')
+            .expect(200);
+
+        await request(app)
+            .post('/fullcircle/api/browser-events')
+            .send({
+                id: 'browser-1',
+                at: '2026-06-15T12:00:00.000Z',
+                correlationId: 'fc-correlation-1',
+                event: {
+                    type: 'click',
+                    url: 'http://localhost:5173/billing',
+                    selector: 'button#upgrade',
+                    label: 'Upgrade to Pro',
+                    metadata: {tagName: 'BUTTON'},
+                },
+            })
+            .expect(202)
+            .expect(response => expect(response.body).toEqual({ok: true}));
+
+        await request(app)
+            .get('/fullcircle/api/status')
+            .expect(200)
+            .expect(response => expect(response.body.currentSession.browserEventCount).toBe(1));
+
+        const result = await sessionManager.finishCurrentSessionDetails('browser event session');
+        expect(result?.outputPath).toEqual(expect.any(String));
+        expect(result?.artifact.browserEvents).toEqual([{
+            type: 'click',
+            url: 'http://localhost:5173/billing',
+            selector: 'button#upgrade',
+            label: 'Upgrade to Pro',
+            metadata: {tagName: 'BUTTON'},
+        }]);
+        expect(result?.artifact.timeline).toContainEqual({
+            id: 'browser-1',
+            at: '2026-06-15T12:00:00.000Z',
+            correlationId: 'fc-correlation-1',
+            kind: 'browser.event',
+            event: {
+                type: 'click',
+                url: 'http://localhost:5173/billing',
+                selector: 'button#upgrade',
+                label: 'Upgrade to Pro',
+                metadata: {tagName: 'BUTTON'},
+            },
+        });
     });
 });

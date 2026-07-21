@@ -16,6 +16,23 @@ export const initApp = (deps: ExampleAppDependencies) => {
         res.end(root);
     });
 
+    app.get('/example-app.js', (req, res) => {
+        res.type('application/javascript').send(`
+            document.addEventListener('DOMContentLoaded', () => {
+                const button = document.querySelector('#show-todos-button');
+                const todosContainer = document.querySelector('#todos-container');
+
+                button?.addEventListener('click', async () => {
+                    const response = await fetch('/views/todos');
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch todos: ' + response.status);
+                    }
+                    todosContainer.innerHTML = await response.text();
+                });
+            });
+        `);
+    });
+
     app.get('/views/todos', async (req, res) => {
         res.setHeader('content-type', 'text/html');
         const todos = await externalClient.getTodos();

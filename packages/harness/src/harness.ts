@@ -1,17 +1,37 @@
-import express from 'express';
+import type {AppRequest, AppResponse, Handler, NextFunction} from './mini_http';
 import type {FullCircleInstance, SubscriptionFunc} from './fullcircle';
+import {fullCircleHandlerToExpress, toFullCircleRequest} from './http_adapter';
+import type {
+    FullCircleBody,
+    FullCircleExpectationOptions,
+    FullCircleHandler,
+    FullCircleInvocationCardinality,
+    FullCircleRequest,
+    FullCircleRouteMatcher,
+} from './primitives';
+import {matchesRoute, routeMatcherToString} from './route_matcher';
 
 type PathHandlerClump = {
-    path: string;
-    handler: express.Handler;
-    called: boolean;
+    matcher: FullCircleRouteMatcher;
+    handler: Handler;
+    options: Required<Pick<FullCircleExpectationOptions, 'times'>> & Pick<FullCircleExpectationOptions, 'name'>;
+    callCount: number;
+}
+
+type ActualRequestLog = {
+    method: string;
+    url: string;
+    body: FullCircleBody;
 }
 
 export class TestHarness {
     private registeredMocks: PathHandlerClump[] = [];
     private registeredPassthroughs: PathHandlerClump[] = [];
+    private actualRequests: ActualRequestLog[] = [];
     private fc: FullCircleInstance;
     private originalHost: string;
+    private closed = false;
+    private verified = false;
 
     constructor(fc: FullCircleInstance, originalHost: string) {
         this.fc = fc;
@@ -21,8 +41,6 @@ export class TestHarness {
     }
 
     private onRequest: SubscriptionFunc = async (req, res, next): Promise<boolean> => {
-        const path = req.originalUrl;
-
         let destinationHost = this.fc.options.defaultDestination;
 
         if (!destinationHost) {
@@ -42,65 +60,210 @@ export class TestHarness {
             return false;
         }
 
-        // gets first registered mock that hasn't been called
-        const mock = this.registeredMocks.find(m => m.path === path && !m.called);
-        if (mock) {
-            mock.called = true;
+        const fullCircleRequest = toFullCircleRequest(req, destinationHost);
+        this.actualRequests.push({
+            method: fullCircleRequest.method,
+            url: fullCircleRequest.url,
+            body: fullCircleRequest.body,
+        });
 
-            mock.handler(req, res, next);
+        const mock = this.findExpectation(this.registeredMocks, fullCircleRequest);
+        if (mock) {
+            await this.invokeExpectation(mock, req, res, next);
             return true;
         }
 
-        const passthrough = this.registeredMocks.find(m => m.path === path && !m.called);
+        const passthrough = this.findExpectation(this.registeredPassthroughs, fullCircleRequest);
         if (passthrough) {
-            passthrough.called = true;
-
             // we are mocking but in reality this needs to be passed to the proxy middleware
-            passthrough.handler(req, res, next);
+            await this.invokeExpectation(passthrough, req, res, next);
             return true;
         }
 
         return false;
     }
 
-    private runAssertions = async () => {
+    private findExpectation = (
+        expectations: PathHandlerClump[],
+        request: FullCircleRequest,
+    ): PathHandlerClump | undefined => {
+        const matchingExpectations = expectations.filter(m => matchesRoute(m.matcher, request));
+        const available = matchingExpectations.find(canAcceptCall);
+        if (available) {
+            return available;
+        }
+
+        const exhausted = matchingExpectations[0];
+        if (exhausted) {
+            exhausted.callCount += 1;
+        }
+
+        return undefined;
+    }
+
+    private invokeExpectation = async (
+        expectation: PathHandlerClump,
+        req: AppRequest,
+        res: AppResponse,
+        next: NextFunction,
+    ) => {
+        expectation.callCount += 1;
+        try {
+            await Promise.resolve(expectation.handler(req, res, next));
+        } catch (error) {
+            expectation.callCount -= 1;
+            throw error;
+        }
+    }
+
+    verify = async () => {
         const messages: string[] = [];
         const errors: string[] = [];
 
         for (const mock of this.registeredMocks) {
-            if (mock.called) {
-                messages.push(`Mocked response for ${mock.path}`);
-            } else {
-                messages.push(`Did not receive request to mock for ${mock.path}`);
-                errors.push(`Did not receive request to mock for ${mock.path}`);
-            }
+            const result = expectationAssertionMessage('mock', mock);
+            messages.push(result.message);
+            errors.push(...result.errors);
         }
 
         for (const pt of this.registeredPassthroughs) {
-            if (pt.called) {
-                messages.push(`Proxied response to external host for ${pt.path}`);
-            } else {
-                messages.push(`Did not receive request to proxy for ${pt.path}`);
-                errors.push(`Did not receive request to proxy for ${pt.path}`);
-            }
+            const result = expectationAssertionMessage('proxy', pt);
+            messages.push(result.message);
+            errors.push(...result.errors);
         }
 
         // console.log(messages);
         if (errors.length) {
-            throw new Error(`harness assertions failed:\n${errors.join('\n')}`);
+            const actualRequests = this.actualRequests.length
+                ? [
+                    `Actual requests received by ${this.originalHost}:`,
+                    ...this.actualRequests.map(request => `- ${formatActualRequest(request)}`),
+                ]
+                : [`No actual requests received by ${this.originalHost}.`];
+            throw new Error(`harness assertions failed:\n${[...errors, ...actualRequests].join('\n')}`);
         }
+
+        this.verified = true;
     }
 
-    mock = (path: string, handler: express.Handler) => {
-        this.registeredMocks.push({path, handler, called: false});
+    mock = (path: string, handler: Handler, options: FullCircleExpectationOptions = {}) => {
+        this.registeredMocks.push(createExpectation(path, handler, options));
     }
 
-    passthrough = (path: string, handler: express.Handler) => {
-        this.registeredPassthroughs.push({path, handler, called: false});
+    mockRoute = (
+        matcher: FullCircleRouteMatcher,
+        handler: FullCircleHandler,
+        options: FullCircleExpectationOptions = {},
+    ) => {
+        this.registeredMocks.push(createExpectation(
+            matcher,
+            fullCircleHandlerToExpress(handler, this.originalHost),
+            options,
+        ));
     }
 
-    [Symbol.asyncDispose] = async () => {
+    passthrough = (path: string, handler: Handler, options: FullCircleExpectationOptions = {}) => {
+        this.registeredPassthroughs.push(createExpectation(path, handler, options));
+    }
+
+    close = async (options: {verify?: boolean} = {}) => {
+        if (this.closed) {
+            return;
+        }
+
         this.fc.unsubscribeToRequests(this.onRequest);
-        await this.runAssertions();
+        this.closed = true;
+
+        if (options.verify === false || this.verified) {
+            return;
+        }
+
+        await this.verify();
     }
+
+    [Symbol.asyncDispose] = this.close;
 }
+
+const createExpectation = (
+    matcher: FullCircleRouteMatcher,
+    handler: Handler,
+    options: FullCircleExpectationOptions,
+): PathHandlerClump => ({
+    matcher,
+    handler,
+    options: {
+        name: options.name,
+        times: options.times ?? 1,
+    },
+    callCount: 0,
+});
+
+const canAcceptCall = (expectation: PathHandlerClump): boolean => {
+    const cardinality = normalizeCardinality(expectation.options.times);
+    return cardinality.max === undefined || expectation.callCount < cardinality.max;
+};
+
+const expectationAssertionMessage = (
+    kind: 'mock' | 'proxy',
+    expectation: PathHandlerClump,
+): {message: string; errors: string[]} => {
+    const cardinality = normalizeCardinality(expectation.options.times);
+    const expected = expectationLabel(kind, expectation);
+    const callCount = expectation.callCount;
+
+    if (cardinality.min !== undefined && callCount < cardinality.min) {
+        const legacyMessage = cardinality.min === 1 && cardinality.max === 1 && !expectation.options.name
+            ? `Did not receive request to ${kind} for ${routeMatcherToString(expectation.matcher)}`
+            : `Expected ${expected} to be called at least ${cardinality.min} ${pluralize('time', cardinality.min)}, but it was called ${callCount} ${pluralize('time', callCount)}`;
+        return {message: legacyMessage, errors: [legacyMessage]};
+    }
+
+    if (cardinality.max !== undefined && callCount > cardinality.max) {
+        const error = `Expected ${expected} to be called at most ${cardinality.max} ${pluralize('time', cardinality.max)}, but it was called ${callCount} ${pluralize('time', callCount)}`;
+        return {message: error, errors: [error]};
+    }
+
+    if (kind === 'mock') {
+        return {message: `Mocked response for ${routeMatcherToString(expectation.matcher)} (${callCount} ${pluralize('call', callCount)})`, errors: []};
+    }
+
+    return {message: `Proxied response to external host for ${routeMatcherToString(expectation.matcher)} (${callCount} ${pluralize('call', callCount)})`, errors: []};
+};
+
+const expectationLabel = (kind: 'mock' | 'proxy', expectation: PathHandlerClump): string => {
+    const name = expectation.options.name ? ` "${expectation.options.name}"` : '';
+    return `${kind}${name} for ${routeMatcherToString(expectation.matcher)}`;
+};
+
+const normalizeCardinality = (
+    cardinality: FullCircleInvocationCardinality,
+): {min?: number; max?: number} => {
+    if (cardinality === 'any') {
+        return {min: 0};
+    }
+
+    if (typeof cardinality === 'number') {
+        return {min: cardinality, max: cardinality};
+    }
+
+    return cardinality;
+};
+
+const pluralize = (word: string, count: number): string => count === 1 ? word : `${word}s`;
+
+const formatActualRequest = (request: ActualRequestLog): string => {
+    const body = formatBody(request.body);
+    return body ? `${request.method} ${request.url} body=${body}` : `${request.method} ${request.url}`;
+};
+
+const formatBody = (body: FullCircleBody): string | undefined => {
+    if (body.kind === 'empty') {
+        return undefined;
+    }
+
+    if (body.kind === 'bytes') {
+        return `<${body.value.byteLength} bytes>`;
+    }
+
+    return JSON.stringify(body.value);
+};

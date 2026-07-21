@@ -1,0 +1,13 @@
+{
+  "includeHeaders": false,
+  "destinations": [
+    {
+      "host": "https://twitter.com",
+      "port": 5005
+    },
+    {
+      "host": "https://wikipedia.org",
+      "port": 5006
+    }
+  ]
+}

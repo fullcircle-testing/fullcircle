@@ -1,17 +1,71 @@
-import {RecordingSession} from './session_recorder';
+import {
+    FinishedSessionResult,
+    RecordingSession,
+    RecordingSessionStatus,
+    RecordedBrowserEvent,
+} from './session_recorder';
+
+export type SessionManagerStatus = {
+    recording: boolean;
+    currentSession: RecordingSessionStatus | null;
+    recentCalls: RecordingSessionStatus['recentCalls'];
+    lastFinishedSession: FinishedSessionResult | null;
+};
 
 export class SessionManager {
     private currentSession?: RecordingSession;
+    private lastFinishedSession: FinishedSessionResult | null = null;
 
-    startNewSession = () => {
+    startNewSession = async (): Promise<FinishedSessionResult | undefined> => {
+        const autoFinished = await this.finishCurrentSessionDetails(this.autoFinishedSessionName());
         this.currentSession = new RecordingSession();
+        return autoFinished;
+    }
+
+    private autoFinishedSessionName = (): string => {
+        const startedAt = this.currentSession?.getStatus().startedAt ?? new Date().toISOString();
+        return `auto-finished-${startedAt.replace(/[^0-9A-Za-z._-]+/g, '-')}`;
     }
 
     getCurrentSession = (): RecordingSession | undefined => {
         return this.currentSession;
     }
 
+    getStatus = (): SessionManagerStatus => {
+        const currentSession = this.currentSession?.getStatus() ?? null;
+        return {
+            recording: Boolean(currentSession),
+            currentSession,
+            recentCalls: currentSession?.recentCalls ?? [],
+            lastFinishedSession: this.lastFinishedSession,
+        };
+    }
+
+    recordBrowserEvent = (event: RecordedBrowserEvent) => {
+        this.currentSession?.addBrowserEventToSession({
+            ...event,
+            at: event.at || new Date().toISOString(),
+        });
+    }
+
+    finishCurrentSessionDetails = async (sessionName: string): Promise<FinishedSessionResult | undefined> => {
+        const session = this.currentSession;
+        if (!session) {
+            return undefined;
+        }
+
+        const result = await session.finish(sessionName);
+        this.currentSession = undefined;
+        this.lastFinishedSession = result;
+        return result;
+    }
+
     finishCurrentSession = async (sessionName: string): Promise<string | undefined> => {
-        return this.currentSession?.logRecordedCalls(sessionName);
+        const result = await this.finishCurrentSessionDetails(sessionName);
+        if (!result) {
+            return undefined;
+        }
+
+        return result.message;
     }
 }
